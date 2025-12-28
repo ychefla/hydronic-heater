@@ -73,9 +73,16 @@ private:
     
     // NEW: Temperature control
     float targetTemperature;
+    float roomTargetTemperature;         // NEW: Room temperature target
+    float coolantTargetTemperature;      // NEW: Coolant temperature target
     float pidIntegral;
     float pidLastError;
     unsigned long lastPidUpdate;
+    unsigned long lastPowerAdjustment;   // NEW: For intelligent power control
+    
+    // NEW: Intelligent power control state
+    int currentPowerPercent;             // Current power level (20-100%)
+    int targetPowerPercent;              // Target power based on control logic
     
     bool enableFlowSensor;
     bool enableZones;
@@ -92,6 +99,13 @@ private:
     
     // CRITICAL: Emergency shutdown for safety
     void emergencyShutdown(String reason);
+    
+    // NEW: Intelligent power control methods
+    void updateIntelligentPowerControl();
+    int calculatePowerFromChamberTemp(float chamberTemp);
+    int calculatePowerFromCoolantTemp(float coolantTemp);
+    int calculatePowerFromRoomTemp(float roomTemp, float target);
+    void applyPowerLevel(int powerPercent);
     
     // NEW: Extended control methods
     void updatePowerControl();

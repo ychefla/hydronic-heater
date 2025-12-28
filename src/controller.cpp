@@ -160,18 +160,212 @@ void HydronicHeaterController::handleRunning() {
         glowPlug->turnOff();
     }
     
-    // Adjust air fan speed based on temperature
-    if (chamberTemp < OPERATING_TEMP - 50) {
-        airFan->setSpeed(128);  // Low speed
-    } else if (chamberTemp > OPERATING_TEMP + 50) {
-        airFan->setSpeed(255);  // High speed
-    } else {
-        airFan->setSpeed(192);  // Medium speed
-    }
+    // ========================================
+    // INTELLIGENT POWER CONTROL
+    // ========================================
+    // Adjust heating power based on multiple factors:
+    // 1. Burning chamber temperature (prevent excessive heat)
+    // 2. Coolant temperature (related to circulation)
+    // 3. Room temperature (intelligent thermostat)
+    
+    updateIntelligentPowerControl();
     
     // Adjust coolant pump and heat exchanger fan
     adjustCoolantPump();
     adjustHeatExchangerFan();
+}
+
+// ========================================
+// INTELLIGENT POWER CONTROL IMPLEMENTATION
+// ========================================
+
+void HydronicHeaterController::updateIntelligentPowerControl() {
+    unsigned long currentTime = millis();
+    
+    // Only adjust power periodically (every 2 seconds)
+    if (currentTime - lastPowerAdjustment < POWER_CONTROL_INTERVAL) {
+        return;
+    }
+    lastPowerAdjustment = currentTime;
+    
+    // Get current temperatures
+    float chamberTemp = burningChamberTemp->getLastReading();
+    float coolantTemp = coolantOutputTemp->isValidReading() ? 
+                        coolantOutputTemp->getLastReading() : 
+                        coolantInputTemp->getLastReading();
+    float roomTemp = airTemp->getLastReading();
+    
+    // Calculate power requirements from each control input
+    int chamberPower = calculatePowerFromChamberTemp(chamberTemp);
+    int coolantPower = calculatePowerFromCoolantTemp(coolantTemp);
+    int roomPower = calculatePowerFromRoomTemp(roomTemp, roomTargetTemperature);
+    
+    // Use the MOST RESTRICTIVE (lowest) power requirement
+    // This ensures we don't exceed any limit
+    targetPowerPercent = chamberPower;
+    if (coolantPower < targetPowerPercent) {
+        targetPowerPercent = coolantPower;
+        Serial.println("Power limited by coolant temperature");
+    }
+    if (roomPower < targetPowerPercent) {
+        targetPowerPercent = roomPower;
+        Serial.println("Power limited by room temperature");
+    }
+    
+    // Ensure power stays within safe limits
+    targetPowerPercent = constrain(targetPowerPercent, POWER_MIN_STABLE, POWER_MAX_LIMIT);
+    
+    // Gradually adjust current power toward target (smooth transitions)
+    if (currentPowerPercent < targetPowerPercent) {
+        currentPowerPercent += POWER_ADJUST_STEP;
+        if (currentPowerPercent > targetPowerPercent) {
+            currentPowerPercent = targetPowerPercent;
+        }
+        Serial.print("Increasing power to: ");
+        Serial.print(currentPowerPercent);
+        Serial.println("%");
+    } else if (currentPowerPercent > targetPowerPercent) {
+        currentPowerPercent -= POWER_ADJUST_STEP;
+        if (currentPowerPercent < targetPowerPercent) {
+            currentPowerPercent = targetPowerPercent;
+        }
+        Serial.print("Decreasing power to: ");
+        Serial.print(currentPowerPercent);
+        Serial.println("%");
+    }
+    
+    // Apply the power level to fuel pump and air fan
+    applyPowerLevel(currentPowerPercent);
+}
+
+// Calculate required power based on burning chamber temperature
+int HydronicHeaterController::calculatePowerFromChamberTemp(float chamberTemp) {
+    // If chamber is below operating temperature, allow full power
+    if (chamberTemp < OPERATING_TEMP) {
+        return 100;  // Full power to reach operating temp
+    }
+    
+    // If chamber is at target operating temperature, maintain current
+    if (chamberTemp >= OPERATING_TEMP && chamberTemp < OPERATING_TEMP_MAX) {
+        return 60;  // Normal operating power
+    }
+    
+    // If chamber is above upper operating limit, reduce power
+    if (chamberTemp >= OPERATING_TEMP_MAX) {
+        Serial.println("Chamber temperature high - reducing power");
+        // Linear reduction: 700°C = 50%, 800°C = 30%, 850°C = 20%
+        float reduction = (chamberTemp - OPERATING_TEMP_MAX) / 10.0;
+        int power = 60 - (int)(reduction * 5);
+        return constrain(power, POWER_MIN_STABLE, 60);
+    }
+    
+    return 60;
+}
+
+// Calculate required power based on coolant temperature
+int HydronicHeaterController::calculatePowerFromCoolantTemp(float coolantTemp) {
+    // If coolant is cold, allow more power
+    if (coolantTemp < COOLANT_TARGET_TEMP - 10) {
+        return 100;  // Full power to warm up coolant
+    }
+    
+    // If coolant is near target, use moderate power
+    if (coolantTemp >= (COOLANT_TARGET_TEMP - 10) && 
+        coolantTemp <= (COOLANT_TARGET_TEMP + 5)) {
+        return 70;  // Moderate power to maintain
+    }
+    
+    // If coolant is above target, reduce power
+    if (coolantTemp > (COOLANT_TARGET_TEMP + 5) && 
+        coolantTemp < COOLANT_MAX_TEMP) {
+        Serial.println("Coolant temperature above target - reducing power");
+        // Progressive reduction as coolant gets hotter
+        float excess = coolantTemp - COOLANT_TARGET_TEMP;
+        int power = 70 - (int)(excess * 3);  // Reduce ~3% per degree above target
+        return constrain(power, POWER_MIN_STABLE, 70);
+    }
+    
+    // If coolant is approaching maximum, significantly reduce power
+    if (coolantTemp >= COOLANT_MAX_TEMP) {
+        Serial.println("Coolant temperature at maximum - minimum power");
+        return POWER_MIN_STABLE;  // Minimum stable power only
+    }
+    
+    return 70;
+}
+
+// Calculate required power based on room temperature (intelligent thermostat)
+int HydronicHeaterController::calculatePowerFromRoomTemp(float roomTemp, float target) {
+    // If room temperature sensor invalid, return full power (fail-safe)
+    if (!airTemp->isValidReading()) {
+        return 100;
+    }
+    
+    float tempDifference = target - roomTemp;
+    
+    // Room is significantly colder than target (>5°C below)
+    if (tempDifference > ROOM_TEMP_OFFSET_COLD) {
+        Serial.print("Room significantly cold (");
+        Serial.print(roomTemp);
+        Serial.print("°C vs target ");
+        Serial.print(target);
+        Serial.println("°C) - maximum power");
+        return 100;  // Maximum power for rapid heating
+    }
+    
+    // Room is moderately cold (2-5°C below target)
+    if (tempDifference > 2.0 && tempDifference <= ROOM_TEMP_OFFSET_COLD) {
+        Serial.println("Room moderately cold - high power");
+        return 80;  // High power to reach target
+    }
+    
+    // Room is slightly cold (1-2°C below target)
+    if (tempDifference > ROOM_TEMP_HYSTERESIS && tempDifference <= 2.0) {
+        Serial.println("Room slightly cold - moderate power");
+        return 50;  // Moderate power to maintain
+    }
+    
+    // Room is at target (within hysteresis)
+    if (abs(tempDifference) <= ROOM_TEMP_HYSTERESIS) {
+        Serial.println("Room at target temperature - minimum power");
+        return POWER_MIN_STABLE;  // Just enough to keep warm
+    }
+    
+    // Room is above target (too warm)
+    if (tempDifference < -ROOM_TEMP_HYSTERESIS) {
+        Serial.print("Room above target (");
+        Serial.print(roomTemp);
+        Serial.print("°C vs target ");
+        Serial.print(target);
+        Serial.println("°C) - minimum power");
+        return POWER_MIN_STABLE;  // Minimum to avoid overheating
+    }
+    
+    return 50;  // Default moderate power
+}
+
+// Apply power level to fuel pump and air fan
+void HydronicHeaterController::applyPowerLevel(int powerPercent) {
+    // Convert percentage to PWM values
+    int fuelPumpPWM = map(powerPercent, 0, 100, FUEL_PUMP_MIN_PWM, FUEL_PUMP_MAX_PWM);
+    int airFanSpeed = map(powerPercent, 0, 100, FAN_MIN_SPEED, FAN_MAX_SPEED);
+    
+    // Apply to components
+    dieselPump->setSpeed(fuelPumpPWM);
+    airFan->setSpeed(airFanSpeed);
+    
+    // Log power application
+    static int lastLoggedPower = -1;
+    if (powerPercent != lastLoggedPower) {
+        Serial.print("Applied power level: ");
+        Serial.print(powerPercent);
+        Serial.print("% (Fuel PWM: ");
+        Serial.print(fuelPumpPWM);
+        Serial.print(", Fan: ");
+        Serial.print(airFanSpeed);
+        Serial.println(")");
+        lastLoggedPower = powerPercent;
+    }
 }
 
 void HydronicHeaterController::handleShutdown() {

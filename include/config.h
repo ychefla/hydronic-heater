@@ -45,19 +45,27 @@
 // Combustion Control
 #define GLOW_PLUG_WARMUP_TEMP 800.0
 #define IGNITION_TEMP 300.0
-#define OPERATING_TEMP 600.0
-#define MAX_SAFE_TEMP 900.0
+#define OPERATING_TEMP 600.0            // Target operating temperature
+#define OPERATING_TEMP_MAX 700.0        // NEW: Upper limit for normal operation (reduce power above this)
+#define MAX_SAFE_TEMP 900.0             // Emergency shutdown threshold
 
 // Coolant System
-#define COOLANT_MIN_TEMP 40.0
-#define COOLANT_MAX_TEMP 80.0
-#define COOLANT_WARNING_TEMP 85.0    // NEW: Warning threshold
-#define COOLANT_CRITICAL_TEMP 95.0   // NEW: Emergency shutdown (prevent boiling)
+#define COOLANT_MIN_TEMP 40.0           // Minimum for circulation
+#define COOLANT_TARGET_TEMP 70.0        // NEW: Target coolant temperature for control
+#define COOLANT_MAX_TEMP 80.0           // Maximum normal operating temperature
+#define COOLANT_WARNING_TEMP 85.0       // Warning threshold
+#define COOLANT_CRITICAL_TEMP 95.0      // Emergency shutdown (prevent boiling)
 
-// Zone Temperature Limits (NEW)
-#define FLOOR_MAX_TEMP 45.0         // Safety limit for floor
-#define WATER_MAX_TEMP 80.0         // Safety limit for water tank
-#define CABIN_TARGET_TEMP 20.0      // Default cabin target
+// Room Temperature Control (Intelligent Thermostat)
+#define ROOM_TARGET_TEMP 20.0           // NEW: Default room target temperature
+#define ROOM_TEMP_HYSTERESIS 1.0        // NEW: ±1°C to prevent oscillation
+#define ROOM_TEMP_OFFSET_COLD 5.0       // NEW: If room is 5°C below target, use more power
+#define ROOM_TEMP_OFFSET_WARM 2.0       // NEW: If room is 2°C above target, reduce power significantly
+
+// Zone Temperature Limits
+#define FLOOR_MAX_TEMP 45.0             // Safety limit for floor
+#define WATER_MAX_TEMP 80.0             // Safety limit for water tank
+#define CABIN_TARGET_TEMP 20.0          // Default cabin target
 
 // ============================================
 // TIMING CONSTANTS (milliseconds)
@@ -110,7 +118,7 @@
 #define WIFI_AP_PASSWORD "heater123" // AP password
 
 // ============================================
-// CONTROL PARAMETERS (NEW)
+// CONTROL PARAMETERS
 // ============================================
 
 // PID Constants for temperature control (tune these)
@@ -120,6 +128,18 @@
 
 // Temperature control hysteresis
 #define TEMP_HYSTERESIS 2.0         // ±2°C to prevent oscillation
+
+// Intelligent Power Control (NEW)
+#define POWER_CONTROL_INTERVAL 2000      // Adjust power every 2 seconds
+#define POWER_ADJUST_STEP 5              // Change power by 5% per adjustment
+#define POWER_MIN_STABLE 20              // Minimum power for stable operation (%)
+#define POWER_MAX_LIMIT 100              // Maximum power limit (%)
+
+// Power reduction factors (multipliers)
+#define POWER_REDUCE_CHAMBER_HIGH 0.8    // Reduce to 80% if chamber temp high
+#define POWER_REDUCE_COOLANT_HIGH 0.7    // Reduce to 70% if coolant temp high
+#define POWER_REDUCE_ROOM_WARM 0.6       // Reduce to 60% if room warm
+#define POWER_INCREASE_ROOM_COLD 1.2     // Increase to 120% if room cold (capped at max)
 
 // Fuel pump calibration (PWM to fuel flow)
 // These need to be calibrated for specific heater model
