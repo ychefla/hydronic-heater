@@ -2,6 +2,18 @@
 
 ESP32-based controller system for hydronic diesel heaters that replaces the original controller. This system provides complete control over all heater components with safety monitoring and automatic operation sequences.
 
+## Documentation Structure
+
+This project follows a design-first approach. Please review documents in this order:
+
+1. **[REQUIREMENTS.md](REQUIREMENTS.md)** - System requirements specification
+2. **[DESIGN.md](DESIGN.md)** - System architecture and design decisions
+3. **README.md** (this file) - Implementation overview and features
+4. **[WIRING.md](WIRING.md)** - Hardware wiring guide
+5. **[QUICKSTART.md](QUICKSTART.md)** - Quick setup guide
+6. **[API.md](API.md)** - API documentation for developers
+7. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Problem diagnosis and solutions
+
 ## Features
 
 - **Complete heater control** - Manages all aspects of heater operation
