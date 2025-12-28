@@ -71,6 +71,7 @@ This project follows a **design-first approach**. Documents should be reviewed i
 - [x] Component interaction diagrams
 - [x] State machine diagrams
 - [x] Safety analysis and procedures
+- [x] 🆕 Paku-IoT cloud integration specification
 
 ### 🚧 In Progress (Headers/Framework Ready)
 

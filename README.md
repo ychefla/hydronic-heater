@@ -13,6 +13,7 @@ This project follows a design-first approach. Please review documents in this or
 5. **[QUICKSTART.md](QUICKSTART.md)** - Quick setup guide
 6. **[API.md](API.md)** - API documentation for developers
 7. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Problem diagnosis and solutions
+8. **[PAKU_INTEGRATION.md](PAKU_INTEGRATION.md)** - 🆕 Paku-IoT cloud platform integration guide
 
 ## Features
 
@@ -23,6 +24,7 @@ This project follows a design-first approach. Please review documents in this or
 - **Coolant circulation control** - Automatic pump and heat exchanger fan control
 - **Optional flow monitoring** - Support for coolant flow sensor
 - **Serial interface** - Simple command interface for control and monitoring
+- **🆕 Cloud connectivity** - Integrated with [Paku-IoT platform](https://github.com/ychefla/paku-iot) for remote monitoring, control, and data analytics
 
 ## Hardware Components
 
