@@ -51,6 +51,8 @@
 // Coolant System
 #define COOLANT_MIN_TEMP 40.0
 #define COOLANT_MAX_TEMP 80.0
+#define COOLANT_WARNING_TEMP 85.0    // NEW: Warning threshold
+#define COOLANT_CRITICAL_TEMP 95.0   // NEW: Emergency shutdown (prevent boiling)
 
 // Zone Temperature Limits (NEW)
 #define FLOOR_MAX_TEMP 45.0         // Safety limit for floor

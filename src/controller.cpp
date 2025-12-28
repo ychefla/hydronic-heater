@@ -198,19 +198,173 @@ void HydronicHeaterController::handleShutdown() {
 
 void HydronicHeaterController::checkSafetyConditions() {
     float chamberTemp = burningChamberTemp->getLastReading();
+    float coolantTemp = coolantOutputTemp->getLastReading();
     
-    // Check for overheat
-    if (chamberTemp >= MAX_SAFE_TEMP && currentState != OFF && currentState != SHUTDOWN) {
-        Serial.println("ERROR: Overheat detected!");
-        errorMessage = "Chamber temperature too high";
-        currentState = ERROR;
-        stopHeater();
+    // ========================================
+    // CRITICAL SAFETY 1: Burning Chamber Overtemperature
+    // ========================================
+    if (chamberTemp >= MAX_SAFE_TEMP && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
+        Serial.println("!!! CRITICAL: BURNING CHAMBER OVERTEMPERATURE !!!");
+        Serial.print("Temperature: ");
+        Serial.print(chamberTemp);
+        Serial.println("°C");
+        emergencyShutdown("CHAMBER OVERHEAT");
+        return;
     }
     
-    // Check for sensor failures
+    // Warning level for approaching overheat
+    if (chamberTemp >= (MAX_SAFE_TEMP - 50) && currentState == RUNNING) {
+        Serial.println("WARNING: Burning chamber temperature high, reducing power");
+        // Reduce power by 50% as safety measure
+        if (dieselPump->getSpeed() > 128) {
+            dieselPump->setSpeed(128);
+            airFan->setSpeed(128);
+        }
+    }
+    
+    // ========================================
+    // CRITICAL SAFETY 2: Coolant Overtemperature (Boiling Prevention)
+    // ========================================
+    
+    // Critical level: 95°C (approaching boiling at 100°C)
+    if (coolantTemp >= 95.0 && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
+        Serial.println("!!! CRITICAL: COOLANT OVERTEMPERATURE !!!");
+        Serial.print("Coolant temperature: ");
+        Serial.print(coolantTemp);
+        Serial.println("°C - APPROACHING BOILING!");
+        emergencyShutdown("COOLANT OVERHEAT");
+        return;
+    }
+    
+    // Warning level: 85°C
+    if (coolantTemp >= 85.0 && coolantTemp < 95.0 && currentState == RUNNING) {
+        Serial.println("WARNING: Coolant temperature high - reducing power 50%");
+        // Aggressive cooling
+        heatExchangerFan->setSpeed(255);  // Maximum cooling
+        coolantPump->turnOn();             // Ensure circulation
+        // Reduce heat input significantly
+        int currentSpeed = dieselPump->getSpeed();
+        dieselPump->setSpeed(currentSpeed / 2);  // 50% reduction
+        airFan->setSpeed(128);
+    }
+    
+    // Elevated level: 75°C
+    if (coolantTemp >= 75.0 && coolantTemp < 85.0 && currentState == RUNNING) {
+        Serial.println("NOTICE: Coolant temperature elevated - increasing cooling");
+        heatExchangerFan->setSpeed(255);  // Maximum cooling
+        coolantPump->turnOn();
+        // Reduce power by 10%
+        int currentSpeed = dieselPump->getSpeed();
+        int reducedSpeed = currentSpeed * 0.9;
+        if (reducedSpeed > 64) {  // Maintain minimum for stable combustion
+            dieselPump->setSpeed(reducedSpeed);
+        }
+    }
+    
+    // ========================================
+    // CRITICAL SAFETY 3: Fuel Depletion Detection
+    // ========================================
+    
+    // Method 1: Temperature drop detection (primary indicator)
+    static unsigned long lastFuelCheck = 0;
+    static float lastChamberTempForFuel = 0;
+    static int lowTempCounter = 0;
+    
+    if (currentState == RUNNING && millis() - lastFuelCheck >= 5000) {  // Check every 5 seconds
+        // Check for sudden temperature drop (fuel depletion signature)
+        if (chamberTemp < (OPERATING_TEMP - 200) &&   // 400°C drop from normal
+            chamberTemp < lastChamberTempForFuel &&    // Temperature is dropping
+            dieselPump->isRunning()) {                 // Pump supposedly running
+            
+            lowTempCounter++;
+            Serial.println("WARNING: Burning chamber temperature dropping - possible fuel depletion");
+            Serial.print("Counter: ");
+            Serial.println(lowTempCounter);
+            
+            // If temperature stays low for 3 consecutive checks (15 seconds), assume fuel empty
+            if (lowTempCounter >= 3) {
+                Serial.println("!!! CRITICAL: FUEL DEPLETION DETECTED !!!");
+                emergencyShutdown("FUEL EMPTY");
+                return;
+            }
+        } else if (chamberTemp >= (OPERATING_TEMP - 100)) {
+            // Temperature normal, reset counter
+            lowTempCounter = 0;
+        }
+        
+        lastChamberTempForFuel = chamberTemp;
+        lastFuelCheck = millis();
+    }
+    
+    // Method 2: Ignition failure pattern (backup detection)
+    // This is handled in handleIgnition() with timeout
+    
+    // ========================================
+    // SENSOR VALIDATION (Critical Sensors)
+    // ========================================
+    
+    // Critical: Burning chamber sensor MUST work
     if (!burningChamberTemp->isValidReading() && currentState != OFF) {
-        Serial.println("WARNING: Burning chamber sensor invalid!");
+        Serial.println("!!! CRITICAL: BURNING CHAMBER SENSOR FAILURE !!!");
+        emergencyShutdown("CHAMBER SENSOR FAIL");
+        return;
     }
+    
+    // Critical: At least one coolant sensor must work
+    if (!coolantOutputTemp->isValidReading() && 
+        !coolantInputTemp->isValidReading() && 
+        currentState != OFF) {
+        Serial.println("!!! CRITICAL: COOLANT SENSOR FAILURE !!!");
+        emergencyShutdown("COOLANT SENSOR FAIL");
+        return;
+    }
+    
+    // Warning: Non-critical sensor failures
+    if (!airTemp->isValidReading() && currentState != OFF) {
+        Serial.println("WARNING: Air temperature sensor invalid - continuing in degraded mode");
+    }
+}
+
+// ========================================
+// EMERGENCY SHUTDOWN FUNCTION
+// ========================================
+void HydronicHeaterController::emergencyShutdown(String reason) {
+    Serial.println("\n========================================");
+    Serial.println("!!!  EMERGENCY SHUTDOWN TRIGGERED  !!!");
+    Serial.println("========================================");
+    Serial.print("REASON: ");
+    Serial.println(reason);
+    Serial.println("========================================\n");
+    
+    // 1. IMMEDIATE FUEL CUTOFF
+    dieselPump->turnOff();
+    glowPlug->turnOff();
+    Serial.println("✓ Fuel delivery stopped");
+    Serial.println("✓ Glow plug disabled");
+    
+    // 2. MAXIMUM COOLING
+    airFan->setSpeed(255);
+    heatExchangerFan->setSpeed(255);
+    coolantPump->turnOn();
+    Serial.println("✓ Cooling fans at maximum");
+    Serial.println("✓ Coolant circulation active");
+    
+    // 3. UPDATE STATE
+    currentState = ERROR;
+    errorMessage = reason;
+    stateStartTime = millis();
+    
+    // 4. Extended cooling period for emergency shutdown
+    Serial.println("\nMaintaining emergency cooling...");
+    Serial.println("System will remain in ERROR state");
+    Serial.println("Manual intervention required to restart\n");
+    
+    // Note: In full implementation, this would also:
+    // - Close zone valves
+    // - Send MQTT critical alert
+    // - Sound alarm
+    // - Log to NVS
+    // - Increment safety counter
 }
 
 void HydronicHeaterController::adjustCoolantPump() {

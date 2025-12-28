@@ -90,6 +90,9 @@ private:
     void adjustCoolantPump();
     void adjustHeatExchangerFan();
     
+    // CRITICAL: Emergency shutdown for safety
+    void emergencyShutdown(String reason);
+    
     // NEW: Extended control methods
     void updatePowerControl();
     void updateZones();
