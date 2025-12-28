@@ -2,12 +2,15 @@
 
 ESP32-based controller system for hydronic diesel heaters that replaces the original controller. This system provides complete control over all heater components with safety monitoring and automatic operation sequences.
 
+> **🎯 Hcalory W51 YWH-A202 Users**: This guide is specifically tailored for your heater model. See **[HCALORY_W51_GUIDE.md](HCALORY_W51_GUIDE.md)** for model-specific implementation guidance.
+
 ## Documentation Structure
 
 This project follows a design-first approach. Please review documents in this order:
 
 ### 🔬 PHASE 0: Critical Decision Point (START HERE)
-**[UART_TESTING_GUIDE.md](UART_TESTING_GUIDE.md)** - 🚨 **DO THIS FIRST** - Test if your heater supports UART communication. This determines the entire implementation approach!
+1. **[HCALORY_W51_GUIDE.md](HCALORY_W51_GUIDE.md)** - 🎯 **Hcalory W51 YWH-A202 Specific Guide** - Complete guide for this specific heater model
+2. **[UART_TESTING_GUIDE.md](UART_TESTING_GUIDE.md)** - 🚨 **DO THIS FIRST** - Test if your heater supports UART communication. This determines the entire implementation approach!
 
 ### Design Documentation
 1. **[REQUIREMENTS.md](REQUIREMENTS.md)** - System requirements specification
