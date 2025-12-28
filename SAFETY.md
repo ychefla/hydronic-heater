@@ -1,9 +1,12 @@
 # Critical Safety Requirements
 ## Hydronic Diesel Heater Controller
 
-**Version:** 4.0 - Complete Safety System  
+**Version:** 5.0 - Corrected Temperature Safety System  
 **Date:** December 2025  
 **Priority:** CRITICAL
+
+> **⚠️ CRITICAL UPDATE:** Temperature limits have been corrected based on actual heater specifications.
+> The burning chamber operates at **130-230°C** (NOT 600-900°C as previously documented).
 
 ---
 
@@ -15,69 +18,153 @@ This document specifies **mandatory safety features** that MUST be implemented t
 
 | Safety System | Trigger Condition | Response Time | Action |
 |---------------|-------------------|---------------|--------|
-| **SAFE-1: Chamber Overheat** | >900°C | <500ms | Emergency shutdown |
+| **SAFE-1A: Chamber Overheat** | ≥230°C | <500ms | Emergency shutdown |
+| **SAFE-1B: Rapid Temp Spike** | >50°C in 5s | Immediate | Emergency shutdown |
+| **SAFE-1C: Low Chamber Temp** | <130°C | None | Maintain min power |
 | **SAFE-2: Coolant Overheat** | >95°C (boiling prevention) | <500ms | Emergency shutdown |
 | **SAFE-3: Fuel Depletion** | Temp drop pattern | <30 seconds | Safe shutdown + purge |
 | **SAFE-4: Pump Failure** | Pump not running with heat | Immediate | Emergency shutdown |
 | **SAFE-5: Sensor Failure** | Invalid readings | <2 seconds | Emergency shutdown |
 
-All five systems are **CRITICAL** and **MANDATORY** for safe operation.
+All systems are **CRITICAL** and **MANDATORY** for safe operation.
 
 ---
 
-## 2. Critical Safety Requirements
+## 2. Critical Temperature Specifications
 
-### Overview of Safety Systems
+### ⚠️ CORRECTED BURNING CHAMBER TEMPERATURES
 
-The controller implements **FIVE critical safety systems** that work together to prevent equipment damage and safety hazards:
+**Operating Range**: 130°C - 230°C (measured at chamber sensor)
 
-1. **Burning Chamber Overtemperature Protection** - Prevents fire/damage from combustion overheating
-2. **Coolant Overtemperature Protection** - Prevents boiling and pressure buildup
-3. **Fuel Depletion Detection** - Prevents damage from running without fuel
-4. **Coolant Pump Failure Detection** - Prevents overheating from lack of circulation
-5. **Temperature Sensor Validation** - Ensures critical monitoring is functional
+| Temperature | Condition | Action |
+|------------|-----------|--------|
+| <80°C | Cold/Startup | Glow plug heating |
+| 80°C | Ignition detected | Start fuel delivery |
+| <130°C | Below clean burn threshold | **Maintain minimum power** - DO NOT reduce |
+| 130°C | **Minimum for clean burning** | Safe lower limit |
+| 180°C | Target operating temperature | Optimal efficiency |
+| 220°C | Approaching maximum | Reduce to minimum power |
+| **230°C** | **MAXIMUM SAFE TEMPERATURE** | **EMERGENCY SHUTDOWN** |
 
-All systems result in **immediate emergency shutdown** when triggered.
+**CRITICAL NOTE**: These are actual chamber temperatures measured by DS18B20 sensor, NOT exhaust gas temperatures which are much higher.
 
 ---
 
-### SAFE-1: Burning Chamber Overtemperature Protection
+## 3. Critical Safety Requirements
+
+### SAFE-1A: Burning Chamber Maximum Temperature Protection
 
 **Priority**: CRITICAL - MANDATORY
 
 **Requirements**:
-- SAFE-1.1: System SHALL continuously monitor burning chamber temperature
-- SAFE-1.2: System SHALL trigger emergency shutdown if temperature > 900°C
-- SAFE-1.3: System SHALL trigger warning if temperature > 850°C (approaching limit)
-- SAFE-1.4: System SHALL check temperature at minimum 2 Hz (every 500ms)
-- SAFE-1.5: Emergency shutdown SHALL complete within 500ms of detection
-- SAFE-1.6: System SHALL NOT allow restart until temperature drops below 600°C
-- SAFE-1.7: System SHALL log overtemperature events with timestamp
+- SAFE-1A.1: System SHALL continuously monitor burning chamber temperature
+- SAFE-1A.2: System SHALL trigger emergency shutdown if temperature ≥ **230°C**
+- SAFE-1A.3: System SHALL trigger warning if temperature ≥ 220°C (approaching limit)
+- SAFE-1A.4: System SHALL check temperature at minimum 2 Hz (every 500ms)
+- SAFE-1A.5: Emergency shutdown SHALL complete within 500ms of detection
+- SAFE-1A.6: System SHALL NOT allow restart until temperature drops below 150°C
+- SAFE-1A.7: System SHALL log overtemperature events with timestamp
 
-**Shutdown Sequence on Overtemperature**:
+**Shutdown Sequence on Maximum Temperature**:
 1. Immediately cut fuel delivery (diesel pump OFF)
 2. Immediately disable glow plug
 3. Set air fan to MAXIMUM speed (cooling)
 4. Set heat exchanger fan to MAXIMUM speed
 5. Maintain coolant pump ON
-6. Enter ERROR state with message "OVERTEMPERATURE"
+6. Enter ERROR state with message "CHAMBER OVERHEAT"
 7. Sound alarm if available
 8. Send MQTT alert (if connected)
 
 **Rationale**: 
 - Prevents fire hazard from overheated combustion chamber
 - Prevents damage to heater components
-- Most critical safety feature
+- Maximum safe operating temperature
 
 **Testing**:
-- Simulate overtemperature condition
+- Simulate 230°C+ condition
 - Verify shutdown completes in < 500ms
 - Verify all fuel cutoff mechanisms activate
 - Verify fans activate at maximum
 
 ---
 
-### SAFE-2: Fuel Depletion Detection
+### SAFE-1B: Rapid Temperature Spike Detection
+
+**Priority**: CRITICAL - MANDATORY
+
+**NEW REQUIREMENT**: Rapid temperature increases indicate dry run or coolant circulation failure.
+
+**Requirements**:
+- SAFE-1B.1: System SHALL monitor temperature change rate every 5 seconds
+- SAFE-1B.2: System SHALL trigger emergency shutdown if temp increases >50°C in 5 seconds
+- SAFE-1B.3: Rapid spike indicates dry run or coolant problem
+- SAFE-1B.4: Response time: IMMEDIATE (within current check cycle)
+
+**Detection Logic**:
+```cpp
+// Check every 5 seconds during RUNNING state
+if (currentTime - lastSpikeCheck >= 5000) {
+    float tempChange = currentTemp - lastTemp;
+    if (tempChange > 50.0) {  // Rapid spike
+        emergencyShutdown("RAPID TEMP SPIKE");
+    }
+}
+```
+
+**Possible Causes**:
+- Coolant pump failure (not circulating heat away)
+- Coolant flow blockage
+- Air in coolant system (dry run)
+- Heat exchanger fan failure
+- Sensor placement issue (direct flame contact)
+
+**Shutdown Sequence**:
+1. Immediately cut fuel delivery
+2. Maximum cooling activation
+3. ERROR state with "RAPID TEMP SPIKE"
+4. Log event for diagnostics
+
+**Rationale**: 
+- Prevents catastrophic overheating from circulation failure
+- Early detection of dry run conditions
+- Protects against coolant system failures
+
+---
+
+### SAFE-1C: Minimum Operating Temperature Maintenance
+
+**Priority**: CRITICAL - MANDATORY
+
+**NEW REQUIREMENT**: Chamber temperature must stay above 130°C for clean burning.
+
+**Requirements**:
+- SAFE-1C.1: System SHALL NOT reduce power below minimum if temp < 130°C
+- SAFE-1C.2: Below 130°C indicates incomplete combustion (sooting, inefficiency)
+- SAFE-1C.3: Power MUST be maintained at minimum stable level (20%)
+- SAFE-1C.4: System SHALL warn if temperature drops below 130°C during operation
+
+**Power Control Logic**:
+```cpp
+if (chamberTemp < 130.0) {
+    // DO NOT reduce power - maintain minimum for clean burn
+    return POWER_MIN_STABLE;  // 20%
+}
+```
+
+**Rationale**: 
+- Below 130°C: Incomplete combustion produces soot, carbon buildup
+- Reducing power further makes problem worse
+- Must maintain minimum heat for clean burning
+- Trade-off: Accept minimum power even if other factors suggest reduction
+
+**Warning Indicators**:
+- Log warning if temperature drops below 130°C
+- Continue operation but monitor closely
+- Check fuel quality, air supply, combustion chamber condition
+
+---
+
+### SAFE-2: Coolant Overtemperature Protection (Boiling Prevention)
 
 **Priority**: CRITICAL - MANDATORY
 
@@ -91,13 +178,20 @@ All systems result in **immediate emergency shutdown** when triggered.
 
 **Method 1: Temperature Drop Detection** (Primary)
 ```cpp
+// CORRECTED: With actual chamber temps (130-230°C range)
 // If burning chamber temperature drops rapidly while pump running
 if (dieselPump->isRunning() && 
     currentState == RUNNING &&
-    chamberTemp < OPERATING_TEMP - 200 &&  // 400°C drop
+    chamberTemp < 100 &&                    // Below 100°C (should be 130-230°C)
+    chamberTemp < lastChamberTemp &&        // Temperature dropping
     timeSinceIgnition > 60000) {            // After initial startup
     // Likely fuel depletion
-    triggerFuelEmptyShutdown();
+    fuelDepletionCounter++;
+    if (fuelDepletionCounter >= 3) {        // 3 checks = 15 seconds
+        triggerFuelEmptyShutdown();
+    }
+}
+```
 }
 ```
 
@@ -259,7 +353,7 @@ if (coolantFlowRate < MIN_FLOW_RATE && coolantPump->isRunning()) {
 **Requirements**:
 - SAFE-4.1: System SHALL verify coolant pump is running when heater generates heat
 - SAFE-4.2: System SHALL trigger emergency shutdown if pump fails during operation
-- SAFE-4.3: System SHALL check pump status continuously when chamber temp > 300°C
+- SAFE-4.3: System SHALL check pump status continuously when chamber temp > 80°C (ignition temp)
 - SAFE-4.4: System SHALL verify actual coolant flow if flow sensor available
 - SAFE-4.5: System SHALL prevent heater start if pump cannot be verified
 - SAFE-4.6: System SHALL NOT allow restart until pump operation confirmed
@@ -363,10 +457,11 @@ if (temp == -127.0 || temp == 85.0) {
 
 **Check 2: Rate of Change Validation**
 ```cpp
-// Physical limit: Heater can't change >100°C per second
+// CORRECTED: Physical limit with actual chamber temps (130-230°C range)
+// Heater can't change >20°C per second (realistic for this temperature range)
 float tempChange = abs(currentTemp - lastTemp);
 float timeSeconds = timeDelta / 1000.0;
-float maxChange = timeSeconds * 100.0;
+float maxChange = timeSeconds * 20.0;  // 20°C/s max
 
 if (tempChange > maxChange) {
     // Impossible change - sensor malfunction

@@ -43,11 +43,14 @@
 // ============================================
 
 // Combustion Control
-#define GLOW_PLUG_WARMUP_TEMP 800.0
-#define IGNITION_TEMP 300.0
-#define OPERATING_TEMP 600.0            // Target operating temperature
-#define OPERATING_TEMP_MAX 700.0        // NEW: Upper limit for normal operation (reduce power above this)
-#define MAX_SAFE_TEMP 900.0             // Emergency shutdown threshold
+// CRITICAL: These are ACTUAL measured temperatures in burning chamber
+// NOT exhaust gas temperatures (which are much higher)
+#define GLOW_PLUG_WARMUP_TEMP 100.0     // Warmup chamber to 100°C before ignition
+#define IGNITION_TEMP 80.0              // Ignition detected at 80°C
+#define OPERATING_TEMP_MIN 130.0        // MINIMUM for clean burning (must maintain above this)
+#define OPERATING_TEMP_TARGET 180.0     // Target operating temperature for efficiency
+#define OPERATING_TEMP_MAX 230.0        // MAXIMUM safe operating temperature
+#define TEMP_SPIKE_THRESHOLD 50.0       // Rapid spike (>50°C in 5s) indicates problem
 
 // Coolant System
 #define COOLANT_MIN_TEMP 40.0           // Minimum for circulation
@@ -159,7 +162,8 @@
 #define FLOW_CHECK_INTERVAL 5000    // Check flow every 5 seconds
 
 // Sensor validation
-#define MAX_TEMP_CHANGE_PER_SEC 100.0  // Maximum physically possible temp change (°C/s)
+#define MAX_TEMP_CHANGE_PER_SEC 20.0   // Maximum physically possible temp change (°C/s)
 #define SENSOR_CHECK_INTERVAL 1000     // Validate sensors every second
+#define TEMP_SPIKE_CHECK_INTERVAL 5000 // Check for rapid spikes every 5 seconds
 
 #endif

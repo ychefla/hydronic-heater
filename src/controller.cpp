@@ -113,17 +113,22 @@ void HydronicHeaterController::updateState() {
 
 void HydronicHeaterController::handleGlowPlugWarmup() {
     unsigned long elapsedTime = millis() - stateStartTime;
+    float chamberTemp = burningChamberTemp->getLastReading();
     
-    if (elapsedTime >= GLOW_PLUG_WARMUP_TIME) {
+    // Check if warmup temperature reached OR timeout
+    if (chamberTemp >= GLOW_PLUG_WARMUP_TEMP || elapsedTime >= GLOW_PLUG_WARMUP_TIME) {
         Serial.println("Glow plug warmup complete. Starting ignition...");
+        Serial.print("Chamber temperature: ");
+        Serial.print(chamberTemp);
+        Serial.println("°C");
         currentState = IGNITION;
         stateStartTime = millis();
         
         // Start air fan at low speed
         airFan->setSpeed(128);
         
-        // Start diesel pump
-        dieselPump->turnOn();
+        // Start diesel pump at minimum for ignition
+        dieselPump->setSpeed(FUEL_PUMP_MIN_PWM);
     }
 }
 
@@ -156,15 +161,16 @@ void HydronicHeaterController::handleRunning() {
     float chamberTemp = burningChamberTemp->getLastReading();
     
     // Turn off glow plug once at operating temperature
-    if (chamberTemp >= OPERATING_TEMP && glowPlug->isHeating()) {
+    if (chamberTemp >= OPERATING_TEMP_TARGET && glowPlug->isHeating()) {
         glowPlug->turnOff();
+        Serial.println("Glow plug disabled - at operating temperature");
     }
     
     // ========================================
     // INTELLIGENT POWER CONTROL
     // ========================================
     // Adjust heating power based on multiple factors:
-    // 1. Burning chamber temperature (prevent excessive heat)
+    // 1. Burning chamber temperature (maintain 130-230°C range)
     // 2. Coolant temperature (related to circulation)
     // 3. Room temperature (intelligent thermostat)
     
@@ -239,27 +245,54 @@ void HydronicHeaterController::updateIntelligentPowerControl() {
 }
 
 // Calculate required power based on burning chamber temperature
+// CRITICAL: Chamber must stay between 130°C (clean burn) and 230°C (max safe)
 int HydronicHeaterController::calculatePowerFromChamberTemp(float chamberTemp) {
-    // If chamber is below operating temperature, allow full power
-    if (chamberTemp < OPERATING_TEMP) {
-        return 100;  // Full power to reach operating temp
+    // CRITICAL: Below 130°C is incomplete combustion (sooting, inefficient)
+    // DO NOT reduce power below minimum if we're at or below this threshold
+    if (chamberTemp < OPERATING_TEMP_MIN) {
+        Serial.println("Chamber temperature below clean burn threshold - maintaining minimum power");
+        return POWER_MIN_STABLE;  // Maintain minimum, do not reduce further
     }
     
-    // If chamber is at target operating temperature, maintain current
-    if (chamberTemp >= OPERATING_TEMP && chamberTemp < OPERATING_TEMP_MAX) {
+    // Below target (130-180°C): Increase power to reach optimal temperature
+    if (chamberTemp >= OPERATING_TEMP_MIN && chamberTemp < OPERATING_TEMP_TARGET) {
+        Serial.println("Chamber temperature below target - increasing power");
+        // Linear increase from min to full power
+        float range = OPERATING_TEMP_TARGET - OPERATING_TEMP_MIN;
+        float position = chamberTemp - OPERATING_TEMP_MIN;
+        int power = POWER_MIN_STABLE + (int)((100 - POWER_MIN_STABLE) * (position / range));
+        return constrain(power, POWER_MIN_STABLE, 100);
+    }
+    
+    // At target (180°C ±10°C): Maintain moderate power
+    if (chamberTemp >= (OPERATING_TEMP_TARGET - 10) && 
+        chamberTemp <= (OPERATING_TEMP_TARGET + 10)) {
         return 60;  // Normal operating power
     }
     
-    // If chamber is above upper operating limit, reduce power
-    if (chamberTemp >= OPERATING_TEMP_MAX) {
-        Serial.println("Chamber temperature high - reducing power");
-        // Linear reduction: 700°C = 50%, 800°C = 30%, 850°C = 20%
-        float reduction = (chamberTemp - OPERATING_TEMP_MAX) / 10.0;
-        int power = 60 - (int)(reduction * 5);
-        return constrain(power, POWER_MIN_STABLE, 60);
+    // Approaching max (190-220°C): Progressively reduce power
+    if (chamberTemp > (OPERATING_TEMP_TARGET + 10) && chamberTemp < (OPERATING_TEMP_MAX - 10)) {
+        Serial.println("Chamber temperature elevated - reducing power");
+        // Linear reduction from 60% down to 30%
+        float range = (OPERATING_TEMP_MAX - 10) - (OPERATING_TEMP_TARGET + 10);
+        float position = chamberTemp - (OPERATING_TEMP_TARGET + 10);
+        int power = 60 - (int)(30 * (position / range));
+        return constrain(power, 30, 60);
     }
     
-    return 60;
+    // Near maximum (220-230°C): Minimum power only
+    if (chamberTemp >= (OPERATING_TEMP_MAX - 10) && chamberTemp < OPERATING_TEMP_MAX) {
+        Serial.println("Chamber temperature near maximum - minimum power only");
+        return POWER_MIN_STABLE;
+    }
+    
+    // At or above maximum (≥230°C): Critical, will trigger shutdown in safety check
+    if (chamberTemp >= OPERATING_TEMP_MAX) {
+        Serial.println("!!! Chamber temperature AT MAXIMUM - CRITICAL !!!");
+        return POWER_MIN_STABLE;  // This will also trigger emergency shutdown
+    }
+    
+    return 60;  // Default moderate power
 }
 
 // Calculate required power based on coolant temperature
@@ -395,25 +428,63 @@ void HydronicHeaterController::checkSafetyConditions() {
     float coolantTemp = coolantOutputTemp->getLastReading();
     
     // ========================================
-    // CRITICAL SAFETY 1: Burning Chamber Overtemperature
+    // CRITICAL SAFETY 1: Burning Chamber Temperature Limits
     // ========================================
-    if (chamberTemp >= MAX_SAFE_TEMP && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
-        Serial.println("!!! CRITICAL: BURNING CHAMBER OVERTEMPERATURE !!!");
+    // Maximum safe temperature: 230°C
+    if (chamberTemp >= OPERATING_TEMP_MAX && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
+        Serial.println("!!! CRITICAL: BURNING CHAMBER MAXIMUM TEMPERATURE EXCEEDED !!!");
         Serial.print("Temperature: ");
         Serial.print(chamberTemp);
-        Serial.println("°C");
+        Serial.println("°C (MAX: 230°C)");
         emergencyShutdown("CHAMBER OVERHEAT");
         return;
     }
     
-    // Warning level for approaching overheat
-    if (chamberTemp >= (MAX_SAFE_TEMP - 50) && currentState == RUNNING) {
-        Serial.println("WARNING: Burning chamber temperature high, reducing power");
-        // Reduce power by 50% as safety measure
-        if (dieselPump->getSpeed() > 128) {
-            dieselPump->setSpeed(128);
-            airFan->setSpeed(128);
+    // Warning level for approaching maximum (220°C)
+    if (chamberTemp >= (OPERATING_TEMP_MAX - 10) && currentState == RUNNING) {
+        Serial.println("WARNING: Burning chamber temperature approaching maximum, reducing power");
+        // Reduce to minimum stable power
+        int minPWM = FUEL_PUMP_MIN_PWM;
+        dieselPump->setSpeed(minPWM);
+        airFan->setSpeed(FAN_MIN_SPEED);
+    }
+    
+    // ========================================
+    // CRITICAL SAFETY 1B: Rapid Temperature Spike Detection
+    // ========================================
+    // Rapid temperature increase indicates dry run or coolant circulation problem
+    static float lastChamberTempForSpike = 0;
+    static unsigned long lastSpikeCheck = 0;
+    
+    if (millis() - lastSpikeCheck >= TEMP_SPIKE_CHECK_INTERVAL && currentState == RUNNING) {
+        if (lastChamberTempForSpike > 0) {
+            float tempChange = chamberTemp - lastChamberTempForSpike;
+            // Check for rapid increase (>50°C in 5 seconds)
+            if (tempChange > TEMP_SPIKE_THRESHOLD) {
+                Serial.println("!!! CRITICAL: RAPID TEMPERATURE SPIKE DETECTED !!!");
+                Serial.print("Temperature increased by ");
+                Serial.print(tempChange);
+                Serial.println("°C in 5 seconds");
+                Serial.println("Possible dry run or coolant circulation failure");
+                emergencyShutdown("RAPID TEMP SPIKE");
+                return;
+            }
         }
+        lastChamberTempForSpike = chamberTemp;
+        lastSpikeCheck = millis();
+    }
+    
+    // ========================================
+    // CRITICAL SAFETY 1C: Minimum Operating Temperature
+    // ========================================
+    // Below 130°C indicates incomplete combustion (but don't reduce power)
+    // This is handled in calculatePowerFromChamberTemp() - power is NOT reduced below minimum
+    static unsigned long lastLowTempWarning = 0;
+    if (chamberTemp < OPERATING_TEMP_MIN && currentState == RUNNING && 
+        millis() - lastLowTempWarning > 10000) {
+        Serial.println("WARNING: Chamber temperature below clean burn threshold (130°C)");
+        Serial.println("Incomplete combustion may occur - maintaining minimum power");
+        lastLowTempWarning = millis();
     }
     
     // ========================================
@@ -421,7 +492,7 @@ void HydronicHeaterController::checkSafetyConditions() {
     // ========================================
     
     // Critical level: 95°C (approaching boiling at 100°C)
-    if (coolantTemp >= 95.0 && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
+    if (coolantTemp >= COOLANT_CRITICAL_TEMP && currentState != OFF && currentState != SHUTDOWN && currentState != ERROR) {
         Serial.println("!!! CRITICAL: COOLANT OVERTEMPERATURE !!!");
         Serial.print("Coolant temperature: ");
         Serial.print(coolantTemp);
@@ -431,7 +502,7 @@ void HydronicHeaterController::checkSafetyConditions() {
     }
     
     // Warning level: 85°C
-    if (coolantTemp >= 85.0 && coolantTemp < 95.0 && currentState == RUNNING) {
+    if (coolantTemp >= COOLANT_WARNING_TEMP && coolantTemp < COOLANT_CRITICAL_TEMP && currentState == RUNNING) {
         Serial.println("WARNING: Coolant temperature high - reducing power 50%");
         // Aggressive cooling
         heatExchangerFan->setSpeed(255);  // Maximum cooling
@@ -443,14 +514,14 @@ void HydronicHeaterController::checkSafetyConditions() {
     }
     
     // Elevated level: 75°C
-    if (coolantTemp >= 75.0 && coolantTemp < 85.0 && currentState == RUNNING) {
+    if (coolantTemp >= 75.0 && coolantTemp < COOLANT_WARNING_TEMP && currentState == RUNNING) {
         Serial.println("NOTICE: Coolant temperature elevated - increasing cooling");
         heatExchangerFan->setSpeed(255);  // Maximum cooling
         coolantPump->turnOn();
         // Reduce power by 10%
         int currentSpeed = dieselPump->getSpeed();
         int reducedSpeed = currentSpeed * 0.9;
-        if (reducedSpeed > 64) {  // Maintain minimum for stable combustion
+        if (reducedSpeed > FUEL_PUMP_MIN_PWM) {  // Maintain minimum for stable combustion
             dieselPump->setSpeed(reducedSpeed);
         }
     }
@@ -466,13 +537,18 @@ void HydronicHeaterController::checkSafetyConditions() {
     
     if (currentState == RUNNING && millis() - lastFuelCheck >= 5000) {  // Check every 5 seconds
         // Check for sudden temperature drop (fuel depletion signature)
-        if (chamberTemp < (OPERATING_TEMP - 200) &&   // 400°C drop from normal
-            chamberTemp < lastChamberTempForFuel &&    // Temperature is dropping
-            dieselPump->isRunning()) {                 // Pump supposedly running
+        // With corrected temps: drop below 100°C when should be 130-230°C
+        if (chamberTemp < (OPERATING_TEMP_MIN - 30) &&   // Below 100°C (should be above 130°C)
+            chamberTemp < lastChamberTempForFuel &&       // Temperature is dropping
+            dieselPump->isRunning()) {                    // Pump supposedly running
             
             lowTempCounter++;
             Serial.println("WARNING: Burning chamber temperature dropping - possible fuel depletion");
-            Serial.print("Counter: ");
+            Serial.print("Current: ");
+            Serial.print(chamberTemp);
+            Serial.print("°C, Last: ");
+            Serial.print(lastChamberTempForFuel);
+            Serial.print("°C, Counter: ");
             Serial.println(lowTempCounter);
             
             // If temperature stays low for 3 consecutive checks (15 seconds), assume fuel empty
@@ -481,7 +557,7 @@ void HydronicHeaterController::checkSafetyConditions() {
                 emergencyShutdown("FUEL EMPTY");
                 return;
             }
-        } else if (chamberTemp >= (OPERATING_TEMP - 100)) {
+        } else if (chamberTemp >= OPERATING_TEMP_MIN) {
             // Temperature normal, reset counter
             lowTempCounter = 0;
         }
@@ -574,12 +650,15 @@ void HydronicHeaterController::checkSafetyConditions() {
         // Check for impossible temperature jumps (sensor glitch/failure)
         if (lastChamberTemp > 0) {
             float tempChange = abs(chamberTemp - lastChamberTemp);
-            // Physical limit: Heater can't change more than 100°C per second
-            if (tempChange > 100.0) {
+            // Physical limit: With corrected temps (130-230°C), heater can't change more than 20°C per second
+            if (tempChange > MAX_TEMP_CHANGE_PER_SEC) {
                 Serial.println("!!! CRITICAL: SENSOR READING ANOMALY DETECTED !!!");
                 Serial.print("Impossible temperature change: ");
                 Serial.print(tempChange);
                 Serial.println("°C in 1 second");
+                Serial.print("(Physical limit: ");
+                Serial.print(MAX_TEMP_CHANGE_PER_SEC);
+                Serial.println("°C/s)");
                 Serial.println("Sensor malfunction or wiring issue");
                 emergencyShutdown("SENSOR MALFUNCTION");
                 return;
