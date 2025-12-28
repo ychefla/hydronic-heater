@@ -1,8 +1,40 @@
 # Related Projects and Feature Suggestions
+
 ## Analysis of Existing Diesel Heater Controller Projects
 
 **Date**: December 2025  
-**Purpose**: Document existing projects for design inspiration and feature enhancement
+**Purpose**: Document existing projects for design inspiration and feature enhancement  
+**Status**: ✅ REVISED based on project requirements and priorities
+
+---
+
+## ⚠️ Important: Feature Priorities Updated
+
+This document has been revised to reflect **specific project requirements** and priorities:
+
+**✅ HIGH PRIORITY (Phase 1-2)**:
+- State Persistence (NVS storage)
+- Modular Communication Layer
+- Configuration Management
+- Paku-IoT integration
+- Altitude Compensation
+- Heat Exchanger GPIO Control
+
+**🧪 EXPERIMENTAL (Test Branch)**:
+- UART Protocol Support (verify if heater supports it)
+
+**⏳ FUTURE (Phase 4+)**:
+- OLED Display + Keypad (via Paku-Core framework)
+- OTA Updates (via Paku-IoT framework)
+
+**❌ NOT IMPLEMENTING**:
+- Hardware RTC (use NTP)
+- Fuel Consumption Tracking (depletion detection sufficient)
+- Bluetooth (web interface preferred)
+- Home Assistant (Paku-IoT focus)
+- Cyclic Temperature (not needed)
+- Multi-Language (not needed)
+- Other smart home integrations (not needed for now)
 
 ---
 
@@ -292,276 +324,333 @@ class HeaterUART {
 
 ### 3.1 High Priority Enhancements
 
-#### A. UART Protocol Support 🎯🎯🎯
-**Why**: Most beneficial enhancement
-- Read actual heater parameters
-- Less invasive (work WITH stock controller)
-- Get real error codes
-- Safer integration
+#### A. UART Protocol Support 🎯🎯🎯 EXPERIMENTAL
+**Status**: HIGH PRIORITY - Create test branch
+- **Unknown**: Whether specific heater model supports UART protocol
+- **Unknown**: If supported, can we adjust fuel injection & fan control adequately
+- **Risk**: Heater may not support UART at all
+- **Risk**: Limited control granularity via UART
 
-**Implementation**:
-1. Add UART protocol parser
+**Testing Approach**:
+1. Create separate test branch for UART experiments
+2. Test if heater responds to UART commands
+3. Verify we can read heater parameters
+4. Test power/fan control granularity
+5. Compare with direct hardware control approach
+
+**Implementation** (if successful):
+1. Add UART protocol parser (25000 baud)
 2. Create HeaterUART class
-3. Support both modes: standalone or UART-enhanced
-4. Use heater's actual sensors as backup/validation
+3. Support both modes: direct control OR UART control
+4. Use heater's actual sensors as validation
 
-**Effort**: Medium (2-3 weeks)  
-**Value**: Very High
+**Decision Point**: 
+- If UART works well → hybrid approach (UART + our safety)
+- If UART limited/absent → continue with direct hardware control (current approach)
 
----
-
-#### B. OLED Display + Keypad 🎯🎯
-**Why**: Much better user experience than serial
-- No computer needed
-- Real-time status at a glance
-- On-device configuration
-- Professional appearance
-
-**Recommended Hardware**:
-- 1.3" or 0.96" OLED (SSD1306)
-- 4-5 button keypad
-- I2C interface (easy ESP32 integration)
-
-**Effort**: Medium (1-2 weeks)  
-**Value**: High
+**Effort**: Medium (2-3 weeks testing + implementation)  
+**Value**: Very High (if supported by heater)
 
 ---
 
-#### C. Real-Time Clock (RTC) 🎯🎯
-**Why**: Accurate timers without WiFi
-- DS3231 I2C module (~$2)
-- Battery-backed (keeps time when powered off)
-- Essential for reliable scheduling
-- Works without WiFi/NTP
+#### B. OLED Display + Keypad 🎯 FUTURE with Paku Integration
+**Status**: Future development, must integrate with Paku ecosystem
+- **Requirement**: Full integration with Paku-IoT and Paku-Core
+- User interface should control everything via Paku platform
+- Display should show Paku-managed data
+- Not standalone - part of Paku ecosystem
 
-**Effort**: Low (1 day)  
-**Value**: High (if using timers)
+**Integration Approach**:
+- Use Paku-Core UI framework
+- Display data from Paku-IoT cloud
+- Consistent with other Paku devices
+- Unified user experience
+
+**Priority**: Low (future enhancement via Paku framework)
+**Effort**: Medium (2-3 weeks with Paku integration)  
+**Value**: High (when Paku-Core UI framework ready)
 
 ---
 
-#### D. Fuel Consumption Tracking 🎯
-**Why**: Practical feature users want
-- Estimate fuel usage based on power level
-- Calculate runtime on remaining fuel
-- Auto-shutdown warning before empty
-- Cost tracking
+#### C. ~~Real-Time Clock (RTC)~~ ❌ NOT NEEDED
+**Status**: WiFi/NTP sufficient
+- System gets time from internet via WiFi
+- RTC not needed for this application
+- Simplifies hardware requirements
+- Reduces cost
 
-**Implementation**:
-```cpp
-class FuelTracker {
-    float tankCapacity;      // Liters
-    float currentLevel;      // Liters
-    float consumptionRate;   // L/hr at current power
-    
-    void update(int powerPercent);
-    float getHoursRemaining();
-    float getLitersUsed();
-    bool isLowFuel();
-};
-```
+**Alternative**: NTP time sync over WiFi (already in Paku-IoT integration)
 
-**Effort**: Low (2-3 days)  
-**Value**: Medium-High
+---
+
+#### D. ~~Fuel Consumption Tracking~~ ❌ NOT NEEDED
+**Status**: Not needed for main tank integration
+- System draws from van's main diesel tank (large capacity)
+- Cannot fully empty main tank
+- Only need fuel flow detection (already implemented as SAFE-3)
+- No tracking/estimation required
+
+**Current Implementation**: ✅ Fuel depletion detection sufficient
 
 ---
 
 ### 3.2 Medium Priority Enhancements
 
-#### E. OTA (Over-The-Air) Firmware Updates 🎯
-**Why**: Convenient updates without USB cable
-- ESP32 built-in OTA support
-- Update via web browser or MQTT
-- Version checking and rollback
-- Essential for deployed systems
+#### E. OTA (Over-The-Air) Firmware Updates 🎯 via Paku Framework
+**Status**: Use Paku-IoT/Paku-Core OTA framework
+- **Requirement**: Implement using Paku-IoT OTA system
+- Must integrate with Paku-Core update management
+- Consistent with other Paku devices
+- Centralized update management via cloud
 
-**Effort**: Low-Medium (3-5 days)  
-**Value**: Medium
+**Implementation**:
+- Use Paku-IoT OTA API
+- Follow Paku firmware update protocols
+- Version management via Paku-Core
+- Rollback through Paku platform
 
----
-
-#### F. Bluetooth Support (SPP or BLE) 🎯
-**Why**: Direct phone control without WiFi
-- Android app possible
-- BLE for low power
-- Alternative to WiFi
-- Good for off-grid
-
-**Effort**: Medium (1 week)  
-**Value**: Medium
+**Priority**: Medium (implement after core Paku integration)
+**Effort**: Low (3-5 days using Paku framework)  
+**Value**: High (essential for deployed systems)
 
 ---
 
-#### G. Home Assistant Auto-Discovery 🎯
-**Why**: Seamless smart home integration
-- MQTT discovery protocol
-- Auto-create entities
-- Zero manual configuration
-- Professional integration
+#### F. ~~Bluetooth Support (SPP or BLE)~~ ❌ NOT NEEDED
+**Status**: Web server approach preferred
+- Web interface works with any device (iOS, Android, laptops)
+- No app development needed (especially important for iOS)
+- Simpler to maintain
+- Universal compatibility
 
-**Effort**: Low (2-3 days)  
-**Value**: High (for HA users)
+**Alternative**: WiFi + web server (more practical for cross-platform)
+**Priority**: None (not implementing)
+**Note**: Main user doesn't have Android; iOS app development is complex
+
+---
+
+#### G. ~~Home Assistant Auto-Discovery~~ ❌ NOT NEEDED
+**Status**: Paku-IoT integration sufficient
+- Focus on Paku-IoT platform integration
+- Home Assistant not primary use case
+- Can be added later if needed
+- Not blocking any core functionality
+
+**Priority**: None (not needed for now)
 
 ---
 
 ### 3.3 Low Priority / Nice-to-Have
 
-#### H. Altitude Compensation
-- Adjust fuel/air mixture for altitude
-- Useful for mountain campers
-- Complex calibration needed
+#### H. Altitude Compensation ✅ SHOULD BE INCLUDED
+**Status**: Important for variable altitude use
+- Adjust fuel/air mixture based on altitude
+- Important for mountain/elevation changes
+- Improves combustion efficiency at altitude
+- Prevents incomplete combustion
 
-#### I. Cyclic Temperature Operation
-- Alternate between two temperatures
-- Use case: maintain different day/night temps
-- Simple timer extension
-
-#### J. External GPIO Automation
-- Control external devices based on heater state
-- Example: Turn on house fan when heater running
-- Easy to add
-
-#### K. Multi-Language Support
-- Internationalization
-- More complex than beneficial for most
-
----
-
-## 4. Integration Opportunities
-
-### 4.1 Home Assistant
-
-**Current Support**:
-- MQTT sensor integration
-- Climate entity for temperature control
-- Service calls for commands
-
-**Enhancements**:
-- Auto-discovery (MQTT discovery protocol)
-- Template sensors for calculated values
-- Automation examples in documentation
-
-**Example Auto-Discovery**:
+**Implementation**:
 ```cpp
-// Publish discovery config
-void publishHomeAssistantDiscovery() {
-    StaticJsonDocument<512> doc;
-    doc["name"] = "Camper Heater";
-    doc["state_topic"] = "camper/heater/status";
-    doc["temperature_state_topic"] = "camper/heater/temperature/cabin";
-    doc["mode_state_topic"] = "camper/heater/mode";
-    doc["mode_command_topic"] = "camper/heater/cmd/set_mode";
-    // ... more config
-    
-    String config;
-    serializeJson(doc, config);
-    mqtt.publish("homeassistant/climate/heater/config", config, true);
-}
+class AltitudeCompensation {
+    float currentAltitude;  // meters
+    float getCompensationFactor();  // 0.0-1.0
+    void adjustPowerForAltitude(int& targetPower);
+};
 ```
 
+**Priority**: Medium-High (should be included)
+**Effort**: Low-Medium (3-5 days with calibration)
+**Value**: High (for camper van traveling to mountains)
+
+#### I. ~~Cyclic Temperature Operation~~ ❌ NOT NEEDED
+**Status**: Not needed for now
+- Interesting concept but not required
+- Can be implemented via Paku-IoT scheduling if needed later
+- Simple timer extension (low complexity)
+
+**Priority**: None (future consideration)
+
+#### J. External GPIO Automation ✅ DIRECTLY RELATES TO HEAT EXCHANGER
+**Status**: Important for heat exchanger fan control
+- Control heat exchanger fan based on heater state/temperature
+- GPIO output to trigger external fan relays
+- Temperature-based fan speed control
+- Essential for camper van air heating
+
+**Implementation**:
+```cpp
+class ExternalGPIOController {
+    void updateHeatExchangerFan(float coolantTemp, HeaterState state);
+    void setFanSpeed(int speedPercent);  // PWM or stepped control
+    bool isHeatExchangerReady();
+};
+```
+
+**Priority**: High (directly needed for heat exchanger operation)
+**Effort**: Low (2-3 days)
+**Value**: High (core functionality for air heating)
+
+#### K. ~~Multi-Language Support~~ ❌ NOT NEEDED
+**Status**: Not needed
+- English sufficient for this application
+- Adds complexity without benefit
+- Can be added later via Paku-Core if required
+
+**Priority**: None
+
 ---
 
-### 4.2 ESPHome
+## 4. ~~Integration Opportunities~~ ❌ NOT NEEDED FOR NOW
 
-**Potential**:
-- Create ESPHome external component
-- YAML configuration instead of C++
-- Automatic HA integration
-- Easier for non-programmers
+**Status**: Focus on Paku-IoT integration only
 
-**Trade-offs**:
-- Less flexible than custom firmware
-- Harder to implement complex logic
-- Good for simple integrations
+The project will focus exclusively on Paku-IoT cloud platform integration. Other smart home integrations (Home Assistant, ESPHome, Node-RED) are not needed at this time and can be considered for future development if demand arises.
 
----
-
-### 4.3 Node-RED
-
-**Use Case**:
-- Visual programming for automation
-- MQTT integration straightforward
-- Complex logic flows
-- Dashboard creation
+**Primary Integration**: Paku-IoT (see PAKU_INTEGRATION.md)
 
 ---
 
 ## 5. Architectural Improvements from Research
 
-### 5.1 State Persistence
-
+### 5.1 State Persistence ✅ UTILIZE
 **Learning from Afterburner**:
-- Save state to EEPROM/NVS
-- Resume after power loss
-- Remember user preferences
-- Store runtime statistics
+- Save state to EEPROM/NVS (ESP32 non-volatile storage)
+- Resume after power loss (safety state, operating mode)
+- Remember user preferences (target temps, power profiles)
+- Store runtime statistics (operating hours, error history)
 
-**Implementation Priority**: High
+**Implementation Priority**: **HIGH - Phase 1**
+
+**Benefits**:
+- Seamless recovery from power interruptions
+- User preferences preserved
+- Historical data for maintenance
+- Safety state tracking
 
 ---
 
-### 5.2 Modular Communication Layer
-
+### 5.2 Modular Communication Layer ✅ UTILIZE
 **Learning from multiple projects**:
 - Abstract communication from control logic
-- Support multiple interfaces (Serial, MQTT, BT, Web)
+- Support multiple interfaces simultaneously:
+  - Serial (debugging, local control)
+  - MQTT (Paku-IoT cloud)
+  - Web server (local configuration)
+  - Future: additional protocols as needed
 - Clean separation of concerns
+- Easy to add new interfaces
 
-**Already Good in Our Design**: ✅
+**Implementation Priority**: **HIGH - Phase 1**
+
+**Already Good in Our Design**: ✅ Foundation exists, needs implementation
+
+**Architecture**:
+```cpp
+class CommunicationInterface {
+    virtual void sendStatus(HeaterStatus status) = 0;
+    virtual void sendTemperature(TempData data) = 0;
+    virtual void sendAlert(AlertData alert) = 0;
+};
+
+class SerialInterface : public CommunicationInterface { };
+class MQTTInterface : public CommunicationInterface { };
+class WebInterface : public CommunicationInterface { };
+```
 
 ---
 
-### 5.3 Configuration Management
-
+### 5.3 Configuration Management ✅ UTILIZE
 **Best Practices**:
-- Runtime configuration via web/MQTT
+- Runtime configuration via web/MQTT (no recompile needed)
 - Factory reset capability
-- Configuration backup/restore
-- Validation before applying
+- Configuration backup/restore via Paku-IoT
+- Validation before applying (prevent invalid configs)
+- Configuration versioning for OTA compatibility
+
+**Implementation Priority**: **HIGH - Phase 1**
+
+**Key Features**:
+- Store config in NVS (persists across reboots)
+- MQTT commands to update configuration
+- Web interface for local configuration
+- Validate all changes before applying
+- Rollback on validation failure
+
+**Example Configuration Items**:
+- Temperature thresholds
+- Safety limits
+- Power profiles
+- Sensor calibration
+- Network settings
+- Paku-IoT credentials
 
 ---
 
-## 6. Recommended Next Steps
+## 6. Recommended Next Steps (REVISED based on requirements)
 
-### Phase 1: Core Enhancements (1-2 months)
-1. **Implement connectivity layer** (WiFi, MQTT, web server)
-2. **Add RTC** for reliable timers
-3. **Implement scheduler** with persistence
-4. **Add fuel tracking** with usage statistics
+### Phase 1: Core Architecture & Paku Integration (1-2 months) ✅ HIGH PRIORITY
+1. **State Persistence** (NVS/EEPROM) - Save state, resume after power loss
+2. **Modular Communication Layer** - Abstract interfaces (Serial, MQTT, Web)
+3. **Configuration Management** - Runtime config via MQTT, validation, backup/restore
+4. **Paku-IoT connectivity** (WiFi, MQTT with TLS, device registration)
+5. **Web server** for local configuration (WiFi captive portal)
 
-### Phase 2: Interface Improvements (1 month)
-5. **OLED display** with menu system
-6. **Home Assistant auto-discovery**
-7. **OTA updates**
+### Phase 2: Essential Features (1 month) ✅ HIGH PRIORITY
+6. **Altitude compensation** - Adjust for elevation changes
+7. **External GPIO automation** - Heat exchanger fan control
+8. **Scheduler implementation** - Timed heating with NTP time sync
+9. **Paku-IoT OTA updates** - Using Paku framework
 
-### Phase 3: Advanced Features (1-2 months)
-8. **UART protocol support** (biggest value-add)
-9. **Bluetooth** for mobile app
-10. **Advanced automation** features
+### Phase 3: Experimental Testing (2-3 weeks) 🧪 TEST BRANCH
+10. **UART protocol support** - Create test branch to verify if heater supports it
+    - Test if heater responds to UART
+    - Verify power/fan control granularity
+    - Decision: hybrid approach or continue direct control
 
-### Phase 4: Polish & Community (ongoing)
-11. **Mobile app** (optional)
-12. **Extended documentation**
-13. **Community contributions**
-14. **Multiple heater model support**
+### Phase 4: Future Enhancements (TBD)
+11. **OLED display + keypad** - Via Paku-Core UI framework (when ready)
+12. **Extended Paku-IoT features** - Advanced analytics, predictive maintenance
+13. **Multiple heater model support**
+14. **Community contributions**
+
+### ❌ Not Implementing:
+- RTC hardware (use NTP over WiFi)
+- Fuel consumption tracking (fuel depletion detection sufficient)
+- Bluetooth support (web interface preferred)
+- Home Assistant auto-discovery (Paku-IoT focus)
+- Cyclic temperature operation (not needed)
+- Multi-language support (not needed)
 
 ---
 
-## 7. Conclusions
+## 7. Conclusions (REVISED)
 
 ### Our Project's Strengths
-- ✅ **Safety-first design** (5 critical systems - comprehensive)
+- ✅ **Safety-first design** (5 critical systems - most comprehensive)
 - ✅ **Intelligent power control** (unique multi-factor approach)
-- ✅ **Excellent documentation** (15 files, design-first)
+- ✅ **Excellent documentation** (17 files, design-first)
 - ✅ **Production-ready core** (tested control logic)
 - ✅ **Modular architecture** (easy to extend)
 - ✅ **Modern build system** (PlatformIO)
+- ✅ **Paku-IoT integration** (complete specification)
 
-### Areas for Enhancement
-- ⏳ User interface (currently serial-only)
-- ⏳ Connectivity implementation (framework ready)
-- ⏳ Real-time clock (for offline operation)
-- ⏳ UART protocol (for heater integration)
-- ⏳ Display and keypad (for standalone use)
+### Priority Enhancements (Based on Requirements)
+- 🎯 **State persistence** - NVS storage (HIGH - Phase 1)
+- 🎯 **Modular communication** - Multiple interfaces (HIGH - Phase 1)
+- 🎯 **Configuration management** - Runtime config (HIGH - Phase 1)
+- 🎯 **Paku-IoT connectivity** - Full implementation (HIGH - Phase 1)
+- 🎯 **Altitude compensation** - Essential for camper van (HIGH - Phase 2)
+- 🎯 **Heat exchanger control** - GPIO automation (HIGH - Phase 2)
+- 🧪 **UART protocol testing** - Experimental test branch (Phase 3)
+- ⏳ **OLED display** - Future via Paku-Core framework (Phase 4)
+- ⏳ **OTA updates** - Via Paku-IoT framework (Phase 2-3)
+
+### Features Explicitly Not Needed
+- ❌ Hardware RTC (use NTP over WiFi)
+- ❌ Fuel consumption tracking (depletion detection sufficient)
+- ❌ Bluetooth (web interface preferred, iOS app complex)
+- ❌ Home Assistant integration (Paku-IoT focus)
+- ❌ Cyclic temperature (not needed)
+- ❌ Multi-language (not needed)
 
 ### Competitive Positioning
 
@@ -570,8 +659,9 @@ void publishHomeAssistantDiscovery() {
 - ➕ More intelligent power control
 - ➕ Better documentation
 - ➕ Multi-zone framework
-- ➖ No display/keypad yet
-- ➖ No timers implemented yet
+- ➕ Modern cloud integration (Paku-IoT)
+- ➖ No display/keypad yet (future via Paku-Core)
+- ➖ No timers implemented yet (Phase 1-2)
 - ➖ Smaller community (new project)
 
 **vs. Others**:
@@ -580,14 +670,28 @@ void publishHomeAssistantDiscovery() {
 - ➕ Most modern architecture
 - ➕ Intelligent thermostat
 - ➕ Production-ready core
-- ➖ Fewer connectivity options currently
+- ➕ Cloud-native design (Paku-IoT)
+- ➕ Camper van multi-zone focus
+- ➖ Fewer connectivity options currently (intentional - focused approach)
 
 ### Unique Innovations in Our Project
 1. **Five-layer safety system** (most comprehensive)
 2. **Multi-factor intelligent power control** (chamber + coolant + room)
 3. **Design-first approach** (requirements → design → implementation)
-4. **Extensive documentation** (15 files, ~150KB)
+4. **Extensive documentation** (17 files, ~170KB)
 5. **Camper van multi-zone focus** (floor, air, water)
+6. **Paku-IoT cloud integration** (modern IoT platform)
+7. **Focused feature set** (no feature bloat, intentional choices)
+
+### Development Philosophy
+- ✅ Safety first, always
+- ✅ Design before implementation
+- ✅ Comprehensive documentation
+- ✅ Modular, extensible architecture
+- ✅ Production-ready core before extras
+- ✅ Cloud-native with Paku-IoT
+- ✅ Feature decisions based on actual use case
+- ✅ No unnecessary complexity
 
 ---
 
@@ -613,6 +717,6 @@ void publishHomeAssistantDiscovery() {
 
 ---
 
-**Last Updated**: December 28, 2025  
-**Next Review**: When implementing connectivity features  
-**Status**: Research Complete, Ready for Enhancement Planning
+**Last Updated**: December 28, 2025 (Revised based on project requirements)  
+**Next Review**: After Phase 1 implementation (State Persistence, Communication, Config Management)  
+**Status**: Requirements-Driven Feature Prioritization Complete
