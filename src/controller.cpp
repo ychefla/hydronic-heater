@@ -300,28 +300,108 @@ void HydronicHeaterController::checkSafetyConditions() {
     // This is handled in handleIgnition() with timeout
     
     // ========================================
-    // SENSOR VALIDATION (Critical Sensors)
+    // CRITICAL SAFETY 4: Coolant Pump Failure Detection
     // ========================================
     
-    // Critical: Burning chamber sensor MUST work
-    if (!burningChamberTemp->isValidReading() && currentState != OFF) {
+    // If heater is running and generating heat, coolant pump MUST be running
+    if ((currentState == RUNNING || currentState == IGNITION) && 
+        chamberTemp > IGNITION_TEMP) {  // Only check when actually generating heat
+        
+        if (!coolantPump->isRunning()) {
+            Serial.println("!!! CRITICAL: COOLANT PUMP NOT RUNNING !!!");
+            Serial.println("Heat is being generated but coolant is not circulating");
+            Serial.println("Risk of overheating and component damage");
+            emergencyShutdown("COOLANT PUMP FAILURE");
+            return;
+        }
+        
+        // Additional check: If flow sensor available, verify actual flow
+        if (flowSensor && coolantPump->isRunning()) {
+            float flowRate = flowSensor->getFlowRate();
+            if (flowRate < 0.5) {  // Less than 0.5 L/min is abnormal
+                Serial.println("!!! CRITICAL: LOW/NO COOLANT FLOW DETECTED !!!");
+                Serial.print("Flow rate: ");
+                Serial.print(flowRate);
+                Serial.println(" L/min");
+                Serial.println("Pump may be running but coolant not flowing");
+                Serial.println("Possible blockage, air lock, or pump failure");
+                emergencyShutdown("NO COOLANT FLOW");
+                return;
+            }
+        }
+    }
+    
+    // ========================================
+    // CRITICAL SAFETY 5: Temperature Sensor Validation
+    // ========================================
+    
+    // Enhanced sensor validation with state-specific requirements
+    
+    // ALWAYS CRITICAL: Burning chamber sensor (any state except OFF)
+    if (!burningChamberTemp->isValidReading() && currentState != OFF && currentState != ERROR) {
         Serial.println("!!! CRITICAL: BURNING CHAMBER SENSOR FAILURE !!!");
+        Serial.println("Cannot operate without combustion temperature monitoring");
         emergencyShutdown("CHAMBER SENSOR FAIL");
         return;
     }
     
-    // Critical: At least one coolant sensor must work
-    if (!coolantOutputTemp->isValidReading() && 
-        !coolantInputTemp->isValidReading() && 
-        currentState != OFF) {
-        Serial.println("!!! CRITICAL: COOLANT SENSOR FAILURE !!!");
+    // CRITICAL during operation: Coolant sensor (when heater running)
+    if ((currentState == RUNNING || currentState == IGNITION || currentState == SHUTDOWN) &&
+        !coolantOutputTemp->isValidReading() && 
+        !coolantInputTemp->isValidReading()) {
+        Serial.println("!!! CRITICAL: ALL COOLANT SENSORS FAILED !!!");
+        Serial.println("Cannot monitor coolant temperature - risk of boiling");
         emergencyShutdown("COOLANT SENSOR FAIL");
         return;
     }
     
+    // Individual coolant sensor failures (warning if we have redundancy)
+    if (!coolantOutputTemp->isValidReading() && coolantInputTemp->isValidReading()) {
+        static unsigned long lastCoolantWarning = 0;
+        if (millis() - lastCoolantWarning > 10000) {  // Warn every 10 seconds
+            Serial.println("WARNING: Coolant output sensor failed - using input sensor only");
+            lastCoolantWarning = millis();
+        }
+    }
+    
+    if (!coolantInputTemp->isValidReading() && coolantOutputTemp->isValidReading()) {
+        static unsigned long lastCoolantWarning2 = 0;
+        if (millis() - lastCoolantWarning2 > 10000) {
+            Serial.println("WARNING: Coolant input sensor failed - using output sensor only");
+            lastCoolantWarning2 = millis();
+        }
+    }
+    
+    // Detect if sensor readings are physically impossible (sensor malfunction)
+    static float lastChamberTemp = 0;
+    static unsigned long lastSensorCheck = 0;
+    
+    if (millis() - lastSensorCheck >= 1000) {  // Check every second
+        // Check for impossible temperature jumps (sensor glitch/failure)
+        if (lastChamberTemp > 0) {
+            float tempChange = abs(chamberTemp - lastChamberTemp);
+            // Physical limit: Heater can't change more than 100°C per second
+            if (tempChange > 100.0) {
+                Serial.println("!!! CRITICAL: SENSOR READING ANOMALY DETECTED !!!");
+                Serial.print("Impossible temperature change: ");
+                Serial.print(tempChange);
+                Serial.println("°C in 1 second");
+                Serial.println("Sensor malfunction or wiring issue");
+                emergencyShutdown("SENSOR MALFUNCTION");
+                return;
+            }
+        }
+        lastChamberTemp = chamberTemp;
+        lastSensorCheck = millis();
+    }
+    
     // Warning: Non-critical sensor failures
     if (!airTemp->isValidReading() && currentState != OFF) {
-        Serial.println("WARNING: Air temperature sensor invalid - continuing in degraded mode");
+        static unsigned long lastAirTempWarning = 0;
+        if (millis() - lastAirTempWarning > 30000) {  // Warn every 30 seconds
+            Serial.println("WARNING: Air temperature sensor invalid - continuing in degraded mode");
+            lastAirTempWarning = millis();
+        }
     }
 }
 

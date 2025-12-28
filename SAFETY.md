@@ -1,7 +1,7 @@
 # Critical Safety Requirements
 ## Hydronic Diesel Heater Controller
 
-**Version:** 3.0 - Safety Update  
+**Version:** 4.0 - Complete Safety System  
 **Date:** December 2025  
 **Priority:** CRITICAL
 
@@ -11,9 +11,35 @@
 
 This document specifies **mandatory safety features** that MUST be implemented to prevent equipment damage, fire hazards, and safety incidents.
 
+### Complete Safety System Summary
+
+| Safety System | Trigger Condition | Response Time | Action |
+|---------------|-------------------|---------------|--------|
+| **SAFE-1: Chamber Overheat** | >900°C | <500ms | Emergency shutdown |
+| **SAFE-2: Coolant Overheat** | >95°C (boiling prevention) | <500ms | Emergency shutdown |
+| **SAFE-3: Fuel Depletion** | Temp drop pattern | <30 seconds | Safe shutdown + purge |
+| **SAFE-4: Pump Failure** | Pump not running with heat | Immediate | Emergency shutdown |
+| **SAFE-5: Sensor Failure** | Invalid readings | <2 seconds | Emergency shutdown |
+
+All five systems are **CRITICAL** and **MANDATORY** for safe operation.
+
 ---
 
 ## 2. Critical Safety Requirements
+
+### Overview of Safety Systems
+
+The controller implements **FIVE critical safety systems** that work together to prevent equipment damage and safety hazards:
+
+1. **Burning Chamber Overtemperature Protection** - Prevents fire/damage from combustion overheating
+2. **Coolant Overtemperature Protection** - Prevents boiling and pressure buildup
+3. **Fuel Depletion Detection** - Prevents damage from running without fuel
+4. **Coolant Pump Failure Detection** - Prevents overheating from lack of circulation
+5. **Temperature Sensor Validation** - Ensures critical monitoring is functional
+
+All systems result in **immediate emergency shutdown** when triggered.
+
+---
 
 ### SAFE-1: Burning Chamber Overtemperature Protection
 
@@ -223,6 +249,200 @@ if (coolantFlowRate < MIN_FLOW_RATE && coolantPump->isRunning()) {
 - Pressure buildup can rupture hoses/components
 - Scalding hazard if coolant sprays
 - Prevents catastrophic failure
+
+---
+
+### SAFE-4: Coolant Pump Failure Detection
+
+**Priority**: CRITICAL - MANDATORY
+
+**Requirements**:
+- SAFE-4.1: System SHALL verify coolant pump is running when heater generates heat
+- SAFE-4.2: System SHALL trigger emergency shutdown if pump fails during operation
+- SAFE-4.3: System SHALL check pump status continuously when chamber temp > 300°C
+- SAFE-4.4: System SHALL verify actual coolant flow if flow sensor available
+- SAFE-4.5: System SHALL prevent heater start if pump cannot be verified
+- SAFE-4.6: System SHALL NOT allow restart until pump operation confirmed
+
+**Detection Methods**:
+
+**Method 1: Pump State Verification** (Primary)
+```cpp
+// When heater is generating heat, pump MUST be running
+if ((currentState == RUNNING || currentState == IGNITION) && 
+    chamberTemp > IGNITION_TEMP) {
+    
+    if (!coolantPump->isRunning()) {
+        emergencyShutdown("COOLANT PUMP FAILURE");
+    }
+}
+```
+
+**Method 2: Flow Rate Verification** (if flow sensor installed)
+```cpp
+// Verify actual coolant movement
+if (flowSensor && coolantPump->isRunning()) {
+    float flowRate = flowSensor->getFlowRate();
+    if (flowRate < 0.5) {  // Less than 0.5 L/min
+        emergencyShutdown("NO COOLANT FLOW");
+    }
+}
+```
+
+**Failure Scenarios Detected**:
+- Pump electrically failed (not turning)
+- Pump mechanical failure (turning but not pumping)
+- Blocked coolant lines (no flow despite pump running)
+- Air lock in coolant system
+- Broken pump impeller
+- Electrical connection failure
+
+**Shutdown Sequence on Pump Failure**:
+1. **Immediate**: Stop fuel delivery (diesel pump OFF)
+2. **Immediate**: Disable glow plug
+3. **Immediate**: Set all cooling fans to MAXIMUM
+4. Attempt to restart coolant pump (may clear air lock)
+5. If pump still not running: maintain emergency state
+6. Enter ERROR state with message "COOLANT PUMP FAILURE"
+7. Log event with temperatures at time of failure
+8. Send MQTT critical alert
+
+**Rationale**:
+- Without coolant circulation, heater will overheat rapidly
+- Can cause local boiling even if overall temp seems OK
+- Damage to heat exchanger, heater core
+- Fire risk from overheated components
+- Pump failure is a common failure mode
+
+**Testing**:
+- Disconnect pump power during operation
+- Verify immediate shutdown
+- Simulate blockage (if flow sensor available)
+- Test with air in coolant lines
+
+---
+
+### SAFE-5: Temperature Sensor Failure Detection
+
+**Priority**: CRITICAL - MANDATORY
+
+**Requirements**:
+- SAFE-5.1: System SHALL continuously validate all critical sensor readings
+- SAFE-5.2: System SHALL trigger emergency shutdown if burning chamber sensor fails
+- SAFE-5.3: System SHALL trigger emergency shutdown if ALL coolant sensors fail
+- SAFE-5.4: System SHALL detect physically impossible temperature changes
+- SAFE-5.5: System SHALL detect sensor disconnection within 2 seconds
+- SAFE-5.6: System SHALL validate sensor readings are within physical limits
+- SAFE-5.7: System SHALL NOT allow operation without critical sensors
+
+**Critical Sensors** (System CANNOT operate without):
+1. **Burning Chamber Temperature** - Absolutely mandatory
+   - Primary safety indicator
+   - No operation possible without this
+   - Immediate shutdown if fails
+
+2. **Coolant Temperature** (at least one sensor)
+   - Need at least ONE of: input OR output
+   - Redundancy preferred but not required
+   - Cannot prevent boiling without this
+
+**Sensor Validation Checks**:
+
+**Check 1: Reading Within Physical Limits**
+```cpp
+// DS18B20 valid range: -55°C to +125°C
+if (temp < -55.0 || temp > 125.0) {
+    sensorFailed = true;
+}
+
+// Check for DS18B20 error codes
+if (temp == -127.0 || temp == 85.0) {
+    sensorFailed = true;  // Disconnected or read error
+}
+```
+
+**Check 2: Rate of Change Validation**
+```cpp
+// Physical limit: Heater can't change >100°C per second
+float tempChange = abs(currentTemp - lastTemp);
+float timeSeconds = timeDelta / 1000.0;
+float maxChange = timeSeconds * 100.0;
+
+if (tempChange > maxChange) {
+    // Impossible change - sensor malfunction
+    emergencyShutdown("SENSOR MALFUNCTION");
+}
+```
+
+**Check 3: Sensor Communication**
+```cpp
+// Verify sensor responds to read requests
+if (!sensor->isValidReading()) {
+    // Sensor not responding or disconnected
+    emergencyShutdown("SENSOR FAIL");
+}
+```
+
+**Failure Response by Sensor**:
+
+```cpp
+// BURNING CHAMBER: Immediate shutdown (any operating state)
+if (!burningChamberTemp->isValidReading() && currentState != OFF) {
+    emergencyShutdown("CHAMBER SENSOR FAIL");
+}
+
+// COOLANT: Shutdown if ALL sensors failed (during operation)
+if ((currentState == RUNNING || currentState == IGNITION) &&
+    !coolantOutputTemp->isValidReading() && 
+    !coolantInputTemp->isValidReading()) {
+    emergencyShutdown("COOLANT SENSOR FAIL");
+}
+
+// COOLANT: Warning if only ONE sensor failed (redundancy)
+if (!coolantOutputTemp->isValidReading() && 
+    coolantInputTemp->isValidReading()) {
+    logWarning("Coolant output sensor failed - using input sensor");
+    // Continue operation with remaining sensor
+}
+
+// AIR TEMP: Warning only (non-critical)
+if (!airTemp->isValidReading()) {
+    logWarning("Air sensor failed - degraded mode");
+    // Continue operation
+}
+```
+
+**Shutdown Sequence on Sensor Failure**:
+1. Log which sensor(s) failed
+2. Log last valid readings from all sensors
+3. Immediate fuel cutoff
+4. Maximum cooling
+5. Enter ERROR state with descriptive message
+6. Display sensor failure information
+7. Prevent restart until sensor replaced/fixed
+8. User must verify sensor function before reset
+
+**Rationale**:
+- Cannot safely operate "blind" without critical sensors
+- Sensor failure could mask dangerous conditions
+- False readings more dangerous than no readings
+- Early detection prevents operating with bad data
+- Better to shut down safely than risk catastrophic failure
+
+**Common Sensor Failure Modes**:
+- Wire disconnection (most common)
+- Corroded connections
+- Water ingress in sensor
+- Physical sensor damage from heat/vibration
+- Poor quality sensors failing prematurely
+- Short circuit in wiring
+
+**Testing**:
+- Disconnect each critical sensor during operation
+- Verify immediate shutdown
+- Test with intermittent connection (loose wire)
+- Verify error messages are accurate
+- Test redundancy (one coolant sensor failing)
 
 ---
 

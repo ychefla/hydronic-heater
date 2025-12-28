@@ -130,4 +130,16 @@
 #define FAN_MIN_SPEED 100           // Minimum fan speed for combustion
 #define FAN_MAX_SPEED 255           // Maximum fan speed
 
+// ============================================
+// SAFETY PARAMETERS (NEW)
+// ============================================
+
+// Coolant flow monitoring (if flow sensor available)
+#define MIN_COOLANT_FLOW_RATE 0.5   // Minimum L/min when pump should be running
+#define FLOW_CHECK_INTERVAL 5000    // Check flow every 5 seconds
+
+// Sensor validation
+#define MAX_TEMP_CHANGE_PER_SEC 100.0  // Maximum physically possible temp change (°C/s)
+#define SENSOR_CHECK_INTERVAL 1000     // Validate sensors every second
+
 #endif
