@@ -38,22 +38,32 @@ unsigned long GlowPlug::getHeatingTime() {
     return millis() - activationTime;
 }
 
-// DieselPump Implementation
-DieselPump::DieselPump(int pin) : pin(pin), isActive(false) {}
+// DieselPump Implementation (UPDATED for PWM)
+DieselPump::DieselPump(int pin, int pwmChannel) : pin(pin), pwmChannel(pwmChannel), isActive(false), currentSpeed(0) {}
 
 void DieselPump::begin() {
-    pinMode(pin, OUTPUT);
+    ledcSetup(pwmChannel, PWM_FREQUENCY, PWM_RESOLUTION);
+    ledcAttachPin(pin, pwmChannel);
     turnOff();
 }
 
+void DieselPump::setSpeed(int speed) {
+    speed = constrain(speed, 0, 255);
+    currentSpeed = speed;
+    ledcWrite(pwmChannel, speed);
+    isActive = (speed > 0);
+}
+
 void DieselPump::turnOn() {
-    digitalWrite(pin, HIGH);
-    isActive = true;
+    setSpeed(255);  // Full speed for backward compatibility
 }
 
 void DieselPump::turnOff() {
-    digitalWrite(pin, LOW);
-    isActive = false;
+    setSpeed(0);
+}
+
+int DieselPump::getSpeed() {
+    return currentSpeed;
 }
 
 bool DieselPump::isRunning() {

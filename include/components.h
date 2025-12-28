@@ -23,18 +23,22 @@ public:
     unsigned long getHeatingTime();
 };
 
-// Diesel Pump Controller
+// Diesel Pump Controller (NOW WITH PWM for variable power)
 class DieselPump {
 private:
     int pin;
+    int pwmChannel;
     bool isActive;
+    int currentSpeed;  // 0-255 PWM value
 
 public:
-    DieselPump(int pin);
+    DieselPump(int pin, int pwmChannel);
     void begin();
-    void turnOn();
+    void setSpeed(int speed);  // 0-255 for variable fuel delivery
+    void turnOn();             // Full speed (backward compatible)
     void turnOff();
     bool isRunning();
+    int getSpeed();
 };
 
 // Fan Controller (generic for air supply and heat exchanger)

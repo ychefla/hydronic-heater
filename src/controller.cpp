@@ -6,7 +6,7 @@ HydronicHeaterController::HydronicHeaterController(bool enableFlow)
     
     // Initialize components
     glowPlug = new GlowPlug(GLOW_PLUG_PIN, GLOW_PLUG_CHANNEL);
-    dieselPump = new DieselPump(DIESEL_PUMP_PIN);
+    dieselPump = new DieselPump(DIESEL_PUMP_PIN, DIESEL_PUMP_CHANNEL);  // UPDATED: Now with PWM channel
     airFan = new Fan(AIR_FAN_PIN, AIR_FAN_CHANNEL);
     coolantPump = new CoolantPump(COOLANT_PUMP_PIN);
     heatExchangerFan = new Fan(HEAT_EXCHANGER_FAN_PIN, HEAT_EXCHANGER_FAN_CHANNEL);

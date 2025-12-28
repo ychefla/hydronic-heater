@@ -2,7 +2,15 @@
 #define CONTROLLER_H
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "components.h"
+#include "connectivity.h"
+
+// Forward declarations
+class ConnectivityManager;
+class HeatingZone;
+class PowerProfile;
+class ScheduleManager;
 
 // Heater operating states
 enum HeaterState {
@@ -14,9 +22,18 @@ enum HeaterState {
     ERROR
 };
 
+// Operating modes (NEW)
+enum OperatingMode {
+    MODE_MANUAL,        // Manual on/off
+    MODE_CONTINUOUS,    // Maintain temperature continuously
+    MODE_SCHEDULED,     // Follow schedule
+    MODE_OFF_MODE       // Explicitly off
+};
+
 // Controller class
 class HydronicHeaterController {
 private:
+    // Existing components
     GlowPlug* glowPlug;
     DieselPump* dieselPump;
     Fan* airFan;
@@ -30,12 +47,40 @@ private:
     
     FlowSensor* flowSensor;  // Optional
     
+    // NEW: Multi-zone support
+    HeatingZone* floorZone;
+    HeatingZone* waterZone;
+    HeatingZone* cabinZone;  // Uses airTemp sensor
+    
+    // NEW: Connectivity
+    ConnectivityManager* connectivity;
+    
+    // NEW: Power management
+    PowerProfile* currentProfile;
+    PowerProfile* ecoProfile;
+    PowerProfile* normalProfile;
+    PowerProfile* boostProfile;
+    int currentPowerPercent;  // 0-100%
+    
+    // NEW: Scheduling
+    ScheduleManager* scheduler;
+    
+    // State management
     HeaterState currentState;
+    OperatingMode operatingMode;
     unsigned long stateStartTime;
     String errorMessage;
     
-    bool enableFlowSensor;
+    // NEW: Temperature control
+    float targetTemperature;
+    float pidIntegral;
+    float pidLastError;
+    unsigned long lastPidUpdate;
     
+    bool enableFlowSensor;
+    bool enableZones;
+    
+    // Existing methods
     void updateState();
     void handleGlowPlugWarmup();
     void handleIgnition();
@@ -45,8 +90,16 @@ private:
     void adjustCoolantPump();
     void adjustHeatExchangerFan();
     
+    // NEW: Extended control methods
+    void updatePowerControl();
+    void updateZones();
+    void updateTemperatureControl();
+    float calculatePID(float current, float target);
+    void setPowerLevel(int percent);
+    void applyPowerProfile(PowerProfile* profile);
+    
 public:
-    HydronicHeaterController(bool enableFlow = false);
+    HydronicHeaterController(bool enableFlow = false, bool enableMultiZone = false);
     ~HydronicHeaterController();
     
     void begin();
@@ -54,6 +107,37 @@ public:
     void startHeater();
     void stopHeater();
     
+    // NEW: Mode control
+    void setOperatingMode(OperatingMode mode);
+    OperatingMode getOperatingMode();
+    String getOperatingModeName();
+    
+    // NEW: Power control
+    void setPowerPercent(int percent);  // 0-100%
+    int getPowerPercent();
+    void setProfile(String profileName);  // "eco", "normal", "boost"
+    String getCurrentProfileName();
+    
+    // NEW: Temperature control
+    void setTargetTemperature(float temp);
+    float getTargetTemperature();
+    
+    // NEW: Zone control
+    void setZoneTarget(String zoneName, float temp);
+    void setZoneEnabled(String zoneName, bool enabled);
+    float getZoneTemperature(String zoneName);
+    bool isZoneEnabled(String zoneName);
+    
+    // NEW: Connectivity
+    void setConnectivity(ConnectivityManager* conn);
+    void publishStatusMQTT();
+    void handleMQTTCommand(String command, String value);
+    
+    // NEW: Scheduling
+    void setScheduler(ScheduleManager* sched);
+    void updateSchedule();
+    
+    // Existing interface
     HeaterState getState();
     String getStateName();
     String getErrorMessage();
@@ -64,6 +148,9 @@ public:
     float getCoolantOutputTemp();
     float getAirTemp();
     float getCoolantFlowRate();
+    
+    // NEW: JSON status
+    String getStatusJSON();
     
     // Status information
     void printStatus();
