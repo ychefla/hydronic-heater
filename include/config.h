@@ -49,6 +49,7 @@
 #define IGNITION_TEMP 80.0              // Ignition detected at 80°C
 #define OPERATING_TEMP_MIN 130.0        // MINIMUM for clean burning (must maintain above this)
 #define OPERATING_TEMP_TARGET 180.0     // Target operating temperature for efficiency
+#define OPERATING_TEMP_ACCEPTABLE 210.0 // Still acceptable - maintain normal power up to here
 #define OPERATING_TEMP_MAX 230.0        // MAXIMUM safe operating temperature
 #define TEMP_SPIKE_THRESHOLD 50.0       // Rapid spike (>50°C in 5s) indicates problem
 

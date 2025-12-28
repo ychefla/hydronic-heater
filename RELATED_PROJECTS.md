@@ -12,6 +12,12 @@
 
 This document has been revised to reflect **specific project requirements** and priorities:
 
+**🔬 PHASE 0: CRITICAL DECISION POINT (DO THIS FIRST)**:
+- **UART Protocol Testing** - Test if heater supports UART communication
+- Determines entire implementation approach (build on top vs. from scratch)
+- Create test branch immediately to verify heater capabilities
+- Decision impacts all subsequent development
+
 **✅ HIGH PRIORITY (Phase 1-2)**:
 - State Persistence (NVS storage)
 - Modular Communication Layer
@@ -19,9 +25,6 @@ This document has been revised to reflect **specific project requirements** and 
 - Paku-IoT integration
 - Altitude Compensation
 - Heat Exchanger GPIO Control
-
-**🧪 EXPERIMENTAL (Test Branch)**:
-- UART Protocol Support (verify if heater supports it)
 
 **⏳ FUTURE (Phase 4+)**:
 - OLED Display + Keypad (via Paku-Core framework)
@@ -322,34 +325,74 @@ class HeaterUART {
 
 ## 3. Feature Suggestions Based on Research
 
-### 3.1 High Priority Enhancements
+### 3.1 CRITICAL FIRST STEP: UART Protocol Testing
 
-#### A. UART Protocol Support 🎯🎯🎯 EXPERIMENTAL
-**Status**: HIGH PRIORITY - Create test branch
-- **Unknown**: Whether specific heater model supports UART protocol
-- **Unknown**: If supported, can we adjust fuel injection & fan control adequately
-- **Risk**: Heater may not support UART at all
-- **Risk**: Limited control granularity via UART
+#### A. UART Protocol Support 🔬🔬🔬 **PHASE 0 - DO THIS FIRST**
+**Status**: **HIGHEST PRIORITY - Test immediately before further development**
 
-**Testing Approach**:
-1. Create separate test branch for UART experiments
-2. Test if heater responds to UART commands
-3. Verify we can read heater parameters
-4. Test power/fan control granularity
-5. Compare with direct hardware control approach
+**Why This Matters**:
+- **If heater supports UART**: We can build on top of existing controller (hybrid approach)
+- **If heater doesn't support UART**: We continue with full hardware replacement (current approach)
+- **This decision determines the entire project direction**
 
-**Implementation** (if successful):
-1. Add UART protocol parser (25000 baud)
-2. Create HeaterUART class
-3. Support both modes: direct control OR UART control
-4. Use heater's actual sensors as validation
+**Current Situation**:
+- ❌ **Unknown**: Whether your specific heater model supports UART protocol
+- ❌ **Unknown**: If supported, can we adjust fuel injection & fan control adequately
+- ⚠️ **Risk**: Building complete system only to discover UART would have worked better
+- ⚠️ **Risk**: Or vice versa - wasting time on UART that doesn't work
 
-**Decision Point**: 
-- If UART works well → hybrid approach (UART + our safety)
-- If UART limited/absent → continue with direct hardware control (current approach)
+**Testing Approach (Create Test Branch NOW)**:
+1. **Create `test/uart-protocol` branch**
+2. Connect ESP32 to heater's control board (find UART pins)
+3. Test various baud rates (25000 is common for Chinese heaters)
+4. Attempt to:
+   - Read heater status/parameters
+   - Send commands (power on/off, adjust power)
+   - Monitor heater's internal sensors
+   - Control fan speed
+   - Control fuel pump frequency
+5. Document what works and what doesn't
+6. Evaluate control granularity (can we do 20-100% power?)
 
-**Effort**: Medium (2-3 weeks testing + implementation)  
-**Value**: Very High (if supported by heater)
+**Decision Tree**:
+```
+UART Test Results
+├─ Full UART Support (read + write + adequate control)
+│  └─ DECISION: Hybrid approach
+│     - Use heater's controller for basic operation
+│     - Add our safety monitoring on top
+│     - Override commands when needed
+│     - Simpler hardware (no pump/fan control needed)
+│
+├─ Partial UART Support (read only or limited control)
+│  └─ DECISION: Validate-only approach
+│     - Use our hardware control (current design)
+│     - Read UART for validation
+│     - Compare our sensors vs. heater's sensors
+│     - Best of both worlds
+│
+└─ No UART Support or inadequate control
+   └─ DECISION: Continue current approach (full hardware replacement)
+      - Complete control via our hardware
+      - Already designed and documented
+      - Ready to implement
+```
+
+**Implementation Path (if UART works)**:
+1. Add UART protocol parser (25000 baud typical)
+2. Create `HeaterUART` class for communication
+3. Support hybrid mode: our safety + heater's controller
+4. Use heater's sensors as validation/backup
+5. Override heater commands when safety limits exceeded
+
+**Timeline**:
+- **Phase 0 (NOW)**: 1-2 weeks UART testing on test branch
+- **Decision Point**: Based on test results, choose approach
+- **Phase 1+**: Continue with chosen approach
+
+**Priority**: **🔬 ABSOLUTE HIGHEST - DO THIS BEFORE ANYTHING ELSE**  
+**Effort**: 1-2 weeks testing + analysis  
+**Value**: **CRITICAL - Determines entire project direction**
 
 ---
 

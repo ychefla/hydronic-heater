@@ -6,14 +6,26 @@ ESP32-based controller system for hydronic diesel heaters that replaces the orig
 
 This project follows a design-first approach. Please review documents in this order:
 
+### 🔬 PHASE 0: Critical Decision Point (START HERE)
+**[UART_TESTING_GUIDE.md](UART_TESTING_GUIDE.md)** - 🚨 **DO THIS FIRST** - Test if your heater supports UART communication. This determines the entire implementation approach!
+
+### Design Documentation
 1. **[REQUIREMENTS.md](REQUIREMENTS.md)** - System requirements specification
 2. **[DESIGN.md](DESIGN.md)** - System architecture and design decisions
-3. **README.md** (this file) - Implementation overview and features
-4. **[WIRING.md](WIRING.md)** - Hardware wiring guide
-5. **[QUICKSTART.md](QUICKSTART.md)** - Quick setup guide
-6. **[API.md](API.md)** - API documentation for developers
-7. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Problem diagnosis and solutions
-8. **[PAKU_INTEGRATION.md](PAKU_INTEGRATION.md)** - 🆕 Paku-IoT cloud platform integration guide
+3. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Visual architecture diagrams
+4. **[SAFETY.md](SAFETY.md)** - ⚠️ **CRITICAL** - Safety requirements (READ BEFORE DEPLOYING)
+
+### Implementation Guides
+5. **README.md** (this file) - Implementation overview and features
+6. **[WIRING.md](WIRING.md)** - Hardware wiring guide
+7. **[QUICKSTART.md](QUICKSTART.md)** - Quick setup guide
+8. **[API.md](API.md)** - API documentation for developers
+
+### Integration & Advanced
+9. **[PAKU_INTEGRATION.md](PAKU_INTEGRATION.md)** - Paku-IoT cloud platform integration guide
+10. **[RELATED_PROJECTS.md](RELATED_PROJECTS.md)** - Feature priorities and related projects
+11. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Problem diagnosis and solutions
+12. **[CAMPERVAN_FEATURES.md](CAMPERVAN_FEATURES.md)** - Camper van application guide
 
 ## Features
 

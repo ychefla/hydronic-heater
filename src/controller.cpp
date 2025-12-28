@@ -270,19 +270,24 @@ int HydronicHeaterController::calculatePowerFromChamberTemp(float chamberTemp) {
         return 60;  // Normal operating power
     }
     
-    // Approaching max (190-220°C): Progressively reduce power
-    if (chamberTemp > (OPERATING_TEMP_TARGET + 10) && chamberTemp < (OPERATING_TEMP_MAX - 10)) {
-        Serial.println("Chamber temperature elevated - reducing power");
-        // Linear reduction from 60% down to 30%
-        float range = (OPERATING_TEMP_MAX - 10) - (OPERATING_TEMP_TARGET + 10);
-        float position = chamberTemp - (OPERATING_TEMP_TARGET + 10);
+    // Normal operating range (190-210°C): Maintain good power
+    if (chamberTemp > (OPERATING_TEMP_TARGET + 10) && chamberTemp <= 210.0) {
+        return 60;  // 210°C is still acceptable, maintain normal power
+    }
+    
+    // Approaching max (210-220°C): Progressively reduce power
+    if (chamberTemp > 210.0 && chamberTemp < (OPERATING_TEMP_MAX - 10)) {
+        Serial.println("Chamber temperature elevated (>210°C) - reducing power");
+        // Linear reduction from 60% down to 30% between 210-220°C
+        float range = (OPERATING_TEMP_MAX - 10) - 210.0;  // 220 - 210 = 10°C range
+        float position = chamberTemp - 210.0;
         int power = 60 - (int)(30 * (position / range));
         return constrain(power, 30, 60);
     }
     
     // Near maximum (220-230°C): Minimum power only
     if (chamberTemp >= (OPERATING_TEMP_MAX - 10) && chamberTemp < OPERATING_TEMP_MAX) {
-        Serial.println("Chamber temperature near maximum - minimum power only");
+        Serial.println("Chamber temperature near maximum (>220°C) - minimum power only");
         return POWER_MIN_STABLE;
     }
     

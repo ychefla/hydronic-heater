@@ -43,6 +43,7 @@ All systems are **CRITICAL** and **MANDATORY** for safe operation.
 | <130°C | Below clean burn threshold | **Maintain minimum power** - DO NOT reduce |
 | 130°C | **Minimum for clean burning** | Safe lower limit |
 | 180°C | Target operating temperature | Optimal efficiency |
+| 210°C | Still acceptable | Maintain normal power up to here |
 | 220°C | Approaching maximum | Reduce to minimum power |
 | **230°C** | **MAXIMUM SAFE TEMPERATURE** | **EMERGENCY SHUTDOWN** |
 
