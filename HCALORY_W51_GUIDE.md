@@ -1,5 +1,7 @@
 # Hcalory W51 YWH-A202 Specific Implementation Guide
 
+> **⚠️ ARCHIVED (February 2026)**: This guide is **superseded** by [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md). The project has pivoted from the HCalory W51 to the **Autoterm Flow 5D** with a hybrid architecture because HCalory refused to provide protocol documentation. This document is retained for historical reference only.
+
 **Heater Model**: Hcalory W51 (YWH-A202)  
 **Type**: 5kW Hydronic Diesel Heater  
 **Application**: Camper van floor/air/water heating  

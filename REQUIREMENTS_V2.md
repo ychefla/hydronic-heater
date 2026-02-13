@@ -1,9 +1,9 @@
 # Extended Requirements Specification
 ## Camper Van Hydronic Diesel Heater Controller System
 
-**Version:** 2.0  
-**Date:** December 2025  
-**Status:** Updated for Camper Van Application
+**Version:** 3.0  
+**Date:** February 2026  
+**Status:** Updated for Autoterm Flow 5D hybrid approach
 
 ---
 
@@ -11,18 +11,23 @@
 
 ### 1.1 Purpose
 
-This document specifies requirements for an ESP32-based controller for **cheap Chinese hydronic diesel heaters** (commonly 2kW-5kW models available online), extended with advanced features for camper van applications.
+This document specifies requirements for an ESP32-based smart controller for the **Autoterm Flow 5D** hydronic diesel heater, using a **hybrid architecture**: Autoterm handles combustion safety, ESP32 provides multi-zone control, scheduling, and cloud integration.
 
-### 1.2 Target Heater Models
+### 1.2 Target Heater
 
-**Compatible Heaters**:
-- Chinese 2kW/5kW air & water diesel heaters
-- Common brands: "Vevor", "Hcalory", generic marketplace models
-- Typical specifications:
-  - 12V/24V operation
-  - 2-5kW heat output
-  - Combined air and water heating capability
-  - Basic controllers with limited features
+**Primary Target**:
+- **Autoterm Flow 5D** (12V variant)
+- 1.4–5.0 kW continuously variable output
+- Documented UART protocol for external integration
+- Certified combustion controller (E-mark, CE)
+- Built-in circulation pump
+
+**Why Autoterm (not Chinese heaters)**:
+- HCalory and similar brands refused to provide protocol documentation
+- Reverse-engineering proprietary protocols is unreliable for a safety-critical system
+- Emulating the remote controller provides no additional functionality
+- Autoterm provides integration documentation to developers
+- Certified combustion controller eliminates the need to implement safety-critical fuel/ignition control
 
 ### 1.3 Camper Van Application
 
@@ -285,29 +290,29 @@ heater/cmd/set_power   - Set power level
 ### 5.1 Expanded GPIO Map
 
 ```cpp
-// Existing assignments (from base requirements)
-#define GLOW_PLUG_PIN 25
-#define DIESEL_PUMP_PIN 26          // Now PWM for variable output
-#define AIR_FAN_PIN 27
-#define COOLANT_PUMP_PIN 14
-#define HEAT_EXCHANGER_FAN_PIN 12
+// === Autoterm UART Communication ===
+#define AUTOTERM_RX_PIN  16         // ESP32 RX <- Autoterm TX
+#define AUTOTERM_TX_PIN  17         // ESP32 TX -> Autoterm RX
+#define AUTOTERM_BAUD    2400       // Verify with Autoterm documentation
 
-// Temperature sensors (OneWire bus)
-#define BURNING_CHAMBER_TEMP_PIN 4
-#define COOLANT_INPUT_TEMP_PIN 16   // Or use OneWire bus
-#define COOLANT_OUTPUT_TEMP_PIN 17  // Or use OneWire bus
-#define AIR_TEMP_PIN 5              // Or use OneWire bus
-
-// NEW: Additional zone sensors (can share OneWire bus)
-#define ONEWIRE_BUS_PIN 4           // Single bus for all DS18B20
-// Sensors identified by unique 64-bit addresses
-
-// NEW: Zone control outputs
+// === Zone Control Outputs ===
+#define HEAT_EXCHANGER_FAN_PIN 12   // PWM - cabin air heating
 #define FLOOR_VALVE_PIN 18          // Floor heating valve/pump
 #define WATER_VALVE_PIN 19          // Water heating valve/pump
 
-// Optional
+// === Temperature Sensors (OneWire bus) ===
+#define ONEWIRE_BUS_PIN 4           // Single bus for all DS18B20
+// Sensors identified by unique 64-bit addresses:
+// - Cabin air, floor supply, floor return, water tank, outside (optional)
+
+// === Optional ===
 #define FLOW_SENSOR_PIN 13
+
+// REMOVED (Autoterm handles combustion):
+// #define GLOW_PLUG_PIN 25        -- Autoterm controller
+// #define DIESEL_PUMP_PIN 26      -- Autoterm controller
+// #define AIR_FAN_PIN 27          -- Autoterm controller
+// #define COOLANT_PUMP_PIN 14     -- Autoterm built-in pump
 ```
 
 ---
@@ -400,40 +405,39 @@ mqtt:
 
 ---
 
-## 8. Chinese Heater Specifics
+## 8. Autoterm Flow 5D Integration
 
-### 8.1 Common Issues with Cheap Heaters
+### 8.1 Hybrid Architecture Benefits
 
-**Known Problems**:
-1. Inconsistent fuel pump calibration
-2. Noisy operation at high power
-3. Poor temperature sensors in stock controller
-4. Limited control options
-5. No remote control capability
+**Autoterm Controller Handles (combustion-critical)**:
+1. Glow plug ignition and management
+2. Fuel metering (variable 0.18–0.62 L/hr)
+3. Combustion air fan speed control
+4. Flame monitoring and safety shutdown
+5. Supply voltage protection
+6. Error diagnostics and codes
 
-**Our Solutions**:
-1. Calibratable PWM fuel control
-2. Variable power modes for quiet operation
-3. Multiple high-quality DS18B20 sensors
-4. Full control over all parameters
-5. Complete MQTT remote control
+**ESP32 Smart Layer Handles (application-level)**:
+1. Multi-zone temperature control via PID
+2. Zone valve management (floor, water, air)
+3. Power setpoint commands to Autoterm via UART
+4. Scheduling and power profiles
+5. MQTT/Paku-IoT cloud integration
+6. Telemetry aggregation (sensors + Autoterm data)
 
-### 8.2 Heater-Specific Adaptations
+### 8.2 UART Communication Requirements
 
-**Fuel Pump Control**:
-- Chinese heaters typically use 12V fuel pumps
-- Our controller uses PWM for variable fuel delivery
-- Calibration mode to determine pump characteristics
+**Protocol**:
+- Binary frame-based protocol via UART
+- Baud rate: typically 2400 (verify with Autoterm documentation)
+- Request integration docs from Autoterm: support@autoterm.com
 
-**Glow Plug**:
-- Usually 12V, high current (50-100A)
-- May have integrated control - check specific model
-- Our controller can bypass or supplement stock control
-
-**Air Fan**:
-- Typically brushless DC fan with speed control
-- PWM control works but may need frequency tuning
-- Some models have separate fan controller
+**Required Commands**:
+- Start/stop heater
+- Set power level (percentage)
+- Set target temperature
+- Request status and telemetry
+- Read error codes
 
 ---
 
@@ -549,5 +553,6 @@ mqtt:
 ---
 
 **Document History**:
+- v3.0 (2026-02-12): Pivoted to Autoterm Flow 5D hybrid architecture
 - v2.0 (2025-12-28): Updated for camper van application with MQTT and multi-zone support
 - v1.0 (2025-12-28): Initial requirements specification created

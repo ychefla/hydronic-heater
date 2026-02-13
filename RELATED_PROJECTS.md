@@ -10,29 +10,32 @@
 
 ## ⚠️ Important: Feature Priorities Updated
 
-This document has been revised to reflect **specific project requirements** and priorities:
+This document has been revised to reflect the **Autoterm Flow 5D hybrid architecture** (February 2026).
 
-**🔬 PHASE 0: CRITICAL DECISION POINT (DO THIS FIRST)**:
-- **UART Protocol Testing** - Test if heater supports UART communication
-- Determines entire implementation approach (build on top vs. from scratch)
-- Create test branch immediately to verify heater capabilities
-- Decision impacts all subsequent development
+**🔄 ARCHITECTURE PIVOT**:
+- Heater changed from HCalory W51 to **Autoterm Flow 5D**
+- Approach changed from full hardware replacement to **hybrid** (Autoterm handles combustion, ESP32 handles smart layer)
+- UART protocol testing no longer needed (Autoterm provides documentation)
+- See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for details
 
-**✅ HIGH PRIORITY (Phase 1-2)**:
-- State Persistence (NVS storage)
-- Modular Communication Layer
-- Configuration Management
-- Paku-IoT integration
-- Altitude Compensation
-- Heat Exchanger GPIO Control
+**✅ HIGH PRIORITY (Phase 2–3)**:
+- AutotermUART communication class
+- PID zone temperature control
+- Modular Communication Layer (MQTT / Paku-IoT)
+- Configuration Management (NVS)
+- Multi-zone valve control
+- Scheduling and power profiles
 
 **⏳ FUTURE (Phase 4+)**:
 - OLED Display + Keypad (via Paku-Core framework)
 - OTA Updates (via Paku-IoT framework)
+- Web configuration interface
 
 **❌ NOT IMPLEMENTING**:
+- ~~UART Protocol Reverse Engineering~~ (Autoterm provides documentation)
+- ~~Full hardware replacement~~ (hybrid approach instead)
 - Hardware RTC (use NTP)
-- Fuel Consumption Tracking (depletion detection sufficient)
+- Fuel Consumption Tracking (Autoterm provides via UART)
 - Bluetooth (web interface preferred)
 - Home Assistant (Paku-IoT focus)
 - Cyclic Temperature (not needed)

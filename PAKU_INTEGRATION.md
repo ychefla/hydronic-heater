@@ -1,9 +1,11 @@
 # Paku-IoT Integration Guide
 ## Hydronic Heater Controller Integration with Paku Cloud Platform
 
-**Version**: 1.0  
-**Date**: December 2025  
+**Version**: 1.1  
+**Date**: February 2026  
 **Purpose**: Document integration between ESP32 Hydronic Heater Controller and Paku-IoT cloud platform
+
+> **Note (February 2026)**: This integration guide remains valid for the Autoterm Flow 5D hybrid architecture. The MQTT topic structure and telemetry format are unchanged. The ESP32 now additionally publishes Autoterm UART telemetry (combustion temp, fan RPM, fuel rate, error codes) alongside DS18B20 zone sensor data. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for the updated architecture.
 
 ---
 

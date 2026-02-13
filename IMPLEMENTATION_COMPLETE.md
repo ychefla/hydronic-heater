@@ -1,8 +1,10 @@
 # Implementation Complete - Final Summary
 
 ## ESP32 Hydronic Diesel Heater Controller
-**Status**: Core System Complete with All Critical Safety Features  
-**Date**: December 28, 2025
+**Status**: Pivoting to Autoterm Flow 5D Hybrid Architecture  
+**Date**: February 2026 (originally December 28, 2025)
+
+> **⚠️ Architecture Update (February 2026)**: The project has pivoted from the HCalory W51 (full hardware replacement) to the **Autoterm Flow 5D** (hybrid architecture). The core design work (zones, PID, MQTT, scheduling) carries forward. Combustion-specific code (GlowPlug, DieselPump, combustion Fan, combustion state machine) will be replaced by an AutotermUART communication layer. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md).
 
 ---
 

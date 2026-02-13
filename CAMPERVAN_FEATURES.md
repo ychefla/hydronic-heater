@@ -6,33 +6,37 @@ This document provides an overview of the extended hydronic heater controller sp
 
 ---
 
-## Base Hardware: Chinese Hydronic Diesel Heaters
+## Base Hardware: Autoterm Flow 5D Hydronic Diesel Heater
 
-### Typical Specifications
-- **Power Output**: 2kW, 3kW, or 5kW models
-- **Voltage**: 12V or 24V DC
-- **Fuel**: Diesel
-- **Heat Transfer**: Combined air and water/coolant
-- **Cost**: $150-$400 USD
-- **Common Brands**: Vevor, Hcalory, generic marketplace brands
+### Specifications
+- **Model**: Autoterm Flow 5D (12V)
+- **Power Output**: 1.4–5.0 kW (continuously variable)
+- **Voltage**: 12V DC
+- **Fuel**: Diesel (0.18–0.62 L/hr)
+- **Heat Transfer**: Hydronic (liquid coolant)
+- **Built-in**: Circulation pump, combustion controller, safety systems
+- **Certifications**: E-mark (ECE R122), CE
+- **Cost**: ~€550–700
+- **Manufacturer**: Autoterm (Estonia)
 
-### Stock Controller Limitations
-- ❌ Simple on/off control only
-- ❌ No temperature feedback
-- ❌ No remote control
-- ❌ Fixed power output
-- ❌ Noisy operation
-- ❌ No scheduling
-- ❌ Poor integration options
+### Why Autoterm Flow 5D (Not Cheap Chinese Heaters)
+- ✅ Documented UART protocol for ESP32 integration
+- ✅ Certified combustion safety controller built-in
+- ✅ Continuously variable power output (not just on/off)
+- ✅ Quality build, proper certifications
+- ✅ Strong DIY community support (van/marine)
+- ❌ HCalory/Vevor refused to provide protocol documentation
+- ❌ Chinese heater reverse-engineering is unreliable for safety-critical use
 
-### Our Enhanced Controller
-- ✅ Variable power output (20-100%)
-- ✅ Multi-zone temperature control
+### Hybrid Architecture
+The Autoterm controller handles combustion (glow plug, fuel, air fan, flame safety).
+Our ESP32 smart layer adds everything the stock controller lacks:
+- ✅ Multi-zone temperature control (PID)
 - ✅ WiFi and MQTT remote control
 - ✅ Scheduled heating
-- ✅ Quiet "Eco" mode
-- ✅ Home Assistant integration
-- ✅ Comprehensive monitoring
+- ✅ Power profiles (Eco/Normal/Boost)
+- ✅ Paku-IoT cloud & Home Assistant integration
+- ✅ Comprehensive zone monitoring
 
 ---
 
@@ -43,18 +47,19 @@ This document provides an overview of the extended hydronic heater controller sp
 **Problem Solved**: Stock controllers run at full power or off, wasting fuel and creating noise.
 
 **Our Solution**:
-- PWM control of fuel pump (20-100% power)
-- Proportional air fan speed
+- ESP32 PID controller calculates heat demand
+- Sends power setpoint to Autoterm via UART (1.4–5.0 kW range)
+- Autoterm modulates fuel and air proportionally
 - Three power profiles:
-  - **Eco Mode**: 30% power, whisper-quiet, 0.15 L/hr fuel
-  - **Normal Mode**: 60% power, balanced, 0.3 L/hr fuel
-  - **Boost Mode**: 100% power, maximum heat, 0.5 L/hr fuel
+  - **Eco Mode**: ~30% power, whisper-quiet, ~0.18 L/hr fuel
+  - **Normal Mode**: ~60% power, balanced, ~0.35 L/hr fuel
+  - **Boost Mode**: 100% power, maximum heat, ~0.62 L/hr fuel
 
 **Benefits**:
 - 40-60% fuel savings in Eco mode
 - Much quieter operation for sleeping
 - Maintains comfortable temperature without cycling
-- Extends component life
+- Extends heater component life
 
 ### 2. Multi-Zone Heating Control
 
@@ -314,23 +319,23 @@ Action: Warm van before returning from activities
 
 ### Initial Investment
 
-| Item | Cost (USD) |
+| Item | Cost (EUR) |
 |------|------------|
-| Chinese diesel heater (5kW) | $250 |
-| ESP32 board | $10 |
-| Temperature sensors (6x DS18B20) | $15 |
-| MOSFETs, relays, components | $30 |
-| Wiring, connectors | $25 |
-| 3-way valves (2x) | $60 |
-| Installation materials | $50 |
-| **Total** | **$440** |
+| Autoterm Flow 5D (12V) | €600 |
+| ESP32 board | €10 |
+| Temperature sensors (6x DS18B20) | €15 |
+| Zone valves (2x) | €60 |
+| Heat exchanger + fan | €50 |
+| Wiring, connectors | €25 |
+| Installation materials | €50 |
+| **Total** | **~€810** |
 
 ### Ongoing Costs
 
-**Fuel Consumption**:
-- Eco mode (30%): 0.15 L/hr
-- Normal mode (60%): 0.3 L/hr
-- Boost mode (100%): 0.5 L/hr
+**Fuel Consumption** (Autoterm Flow 5D):
+- Eco mode (~30%): 0.18 L/hr
+- Normal mode (~60%): 0.35 L/hr
+- Boost mode (100%): 0.62 L/hr
 
 **Typical Usage** (winter night + morning):
 - 8 hours overnight (Eco): 1.2 L
@@ -357,25 +362,28 @@ If replacing campground stays:
 
 ### Multi-Layer Protection
 
-1. **Overtemperature Shutdown**
-   - Burning chamber > 900°C → Emergency stop
-   - Floor surface > 50°C → Zone shutdown
-   - Water tank > 85°C → Zone shutdown
+1. **Combustion Safety (Autoterm controller)**
+   - Overheat protection (certified)
+   - Flame monitoring
+   - Ignition timeout
+   - Supply voltage protection
+   - Autoterm handles safe shutdown on any combustion fault
 
-2. **Fuel Safety**
-   - Ignition timeout (2 minutes)
-   - Automatic fuel cutoff on any error
+2. **Zone Safety (ESP32)**
+   - Floor surface > 50°C → Close floor valve
+   - Water tank > 85°C → Close water valve
+   - Coolant > 95°C → Send stop to Autoterm
+
+3. **Communication Safety (ESP32)**
+   - UART watchdog: no response for 30s → error state
+   - WiFi/MQTT loss → continue on last settings
    - Power-loss defaults to OFF
 
-3. **Cooldown Enforcement**
-   - Mandatory 60-second cooldown
-   - Fans run at maximum
-   - Prevents thermal shock
-
 4. **Monitoring**
-   - Continuous sensor validation
+   - Continuous DS18B20 sensor validation
+   - Autoterm error code monitoring via UART
    - MQTT alerts on problems
-   - Watchdog timer for controller health
+   - ESP32 hardware watchdog timer
 
 5. **Manual Override**
    - Emergency stop always available
@@ -394,20 +402,20 @@ If replacing campground stays:
 
 ---
 
-## Advantages Over Stock Controller
+## Advantages Over Autoterm Stock Controller
 
-| Feature | Stock Controller | Our Controller |
-|---------|------------------|----------------|
-| Power Control | On/Off only | 20-100% variable |
-| Noise Level | Always loud | Quiet Eco mode |
-| Temperature Control | None | PID feedback control |
+| Feature | Autoterm Stock Controller | Our ESP32 Smart Layer |
+|---------|--------------------------|----------------------|
+| Power Control | Basic (panel/app) | PID feedback per zone |
+| Noise Level | Fixed profiles | Adaptive Eco mode |
+| Temperature Control | Single thermostat | Multi-zone PID |
 | Multi-Zone | No | Yes, 3 zones |
-| Remote Control | No | WiFi/MQTT |
-| Scheduling | No | 4 schedules, day-of-week |
-| Fuel Efficiency | Poor (cycling) | Excellent (modulation) |
-| Integration | None | Home Assistant |
-| Monitoring | LEDs only | Full telemetry |
-| Cost | Included | +$190 in parts |
+| Remote Control | Bluetooth (app only) | WiFi/MQTT anywhere |
+| Scheduling | Basic timer | 4 schedules, day-of-week |
+| Fuel Efficiency | Moderate | Optimized (zone-aware) |
+| Cloud Integration | None | Paku-IoT platform |
+| Monitoring | Basic display | Full telemetry + dashboards |
+| Combustion Safety | ✅ Certified | ✅ Delegated to Autoterm |
 
 ---
 

@@ -1,11 +1,13 @@
 # Critical Safety Requirements
 ## Hydronic Diesel Heater Controller
 
-**Version:** 5.0 - Corrected Temperature Safety System  
-**Date:** December 2025  
+**Version:** 6.0 - Updated for Autoterm Flow 5D Hybrid Architecture  
+**Date:** February 2026  
 **Priority:** CRITICAL
 
-> **⚠️ CRITICAL UPDATE:** Temperature limits have been corrected based on actual heater specifications.
+> **⚠️ ARCHITECTURE UPDATE (February 2026)**: With the pivot to the Autoterm Flow 5D hybrid approach, combustion safety (SAFE-1A, SAFE-1B, SAFE-1C, SAFE-3) is now **delegated to the certified Autoterm controller**. The ESP32 smart layer retains responsibility for **zone safety** (coolant overheat, floor/water zone limits), **communication watchdog** (UART timeout), and **sensor validation**. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for the updated safety architecture.
+
+> **⚠️ PREVIOUS UPDATE:** Temperature limits have been corrected based on actual heater specifications.
 > The burning chamber operates at **130-230°C** (NOT 600-900°C as previously documented).
 
 ---

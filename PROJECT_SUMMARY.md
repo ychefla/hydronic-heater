@@ -1,21 +1,26 @@
 # Project Summary
 ## ESP32 Hydronic Diesel Heater Controller for Camper Vans
 
-**Project Status**: Design and Core Implementation Complete  
-**Last Updated**: December 2025
+**Project Status**: Pivoting to Autoterm Flow 5D Hybrid Architecture  
+**Last Updated**: February 2026
 
 ---
 
 ## Executive Summary
 
-This project provides a complete replacement controller for cheap Chinese hydronic diesel heaters (2-5kW models), specifically designed for camper van applications. It transforms a basic on/off heater into an intelligent, multi-zone heating system with remote control, scheduled operation, and comprehensive safety features.
+This project provides an ESP32 smart controller for the **Autoterm Flow 5D** hydronic diesel heater, designed for camper van applications. Using a **hybrid architecture**, the Autoterm certified controller handles combustion safety while the ESP32 provides multi-zone heating control, PID temperature feedback, scheduling, and Paku-IoT cloud integration.
 
 ### Key Value Proposition
 
-- **Cost**: $150-400 for Chinese heater + $190 in controller parts = **$340-590 total**
-- **vs. Premium Heaters**: $2000-3000 for Webasto/Espar with similar capabilities
-- **Savings**: $1400-2400 (70-80% cost reduction)
-- **Payback**: 3-5 months if replacing campground electric hookups
+- **Certified combustion safety**: Autoterm handles glow plug, fuel, flame monitoring (E-marked, CE)
+- **Smart layer via ESP32**: Multi-zone PID control, scheduling, MQTT, cloud dashboards
+- **Cost**: ~€810 total (Autoterm + ESP32 + zone hardware)
+- **vs. Webasto/Espar**: €1200–1500+ for similar heater with locked ecosystem, no DIY control
+- **vs. Chinese heater full replacement**: Eliminates risk of DIY combustion control
+
+### Architecture Change (February 2026)
+
+Originally targeted cheap Chinese hydronic heaters (HCalory W51) with full hardware replacement. That approach was abandoned because HCalory refused to provide protocol documentation, making reliable integration impossible. The project now uses the Autoterm Flow 5D with a hybrid architecture. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for details.
 
 ---
 
@@ -23,12 +28,15 @@ This project provides a complete replacement controller for cheap Chinese hydron
 
 This project follows a **design-first approach**. Documents should be reviewed in this order:
 
+### Start Here
+1. **[AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md)** - Autoterm integration guide (hybrid architecture)
+
 ### Phase 1: Requirements and Design
-1. **[REQUIREMENTS.md](REQUIREMENTS.md)** - Original base system requirements
-2. **[REQUIREMENTS_V2.md](REQUIREMENTS_V2.md)** - Extended camper van requirements
-3. **[DESIGN.md](DESIGN.md)** - System architecture and design decisions
-4. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Visual architecture diagrams
-5. **[SAFETY.md](SAFETY.md)** - ⚠️ **CRITICAL: Must read before building**
+2. **[REQUIREMENTS.md](REQUIREMENTS.md)** - Original base system requirements
+3. **[REQUIREMENTS_V2.md](REQUIREMENTS_V2.md)** - Extended camper van requirements
+4. **[DESIGN.md](DESIGN.md)** - System architecture and design decisions
+5. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Visual architecture diagrams
+6. **[SAFETY.md](SAFETY.md)** - ⚠️ **CRITICAL: Must read before building**
 
 ### Phase 2: Implementation
 6. **[README.md](README.md)** - Project overview and features
@@ -135,35 +143,24 @@ Hardware Abstraction Layer (Arduino/ESP32)
 
 ## Critical Safety Features ⚠️
 
-### Three Mandatory Safety Systems
+### Hybrid Safety Architecture
 
-**1. Burning Chamber Overtemperature Protection**
-- Monitors combustion temperature continuously
-- Emergency shutdown at 900°C
-- Warning at 850°C with power reduction
-- Response time: <500ms
+With the Autoterm Flow 5D hybrid approach, safety responsibilities are split:
 
-**2. Coolant Overtemperature Protection (Boiling Prevention)**
-- Critical shutdown at 95°C (approaching 100°C boiling point)
-- Warning at 85°C with 50% power reduction
-- Elevated cooling at 75°C
-- Prevents dangerous steam pressure buildup
+**Autoterm Controller (certified, combustion-critical)**:
+- Combustion chamber overheat protection
+- Flame monitoring and ignition timeout
+- Fuel metering safety
+- Supply voltage protection
+- Safe shutdown on combustion faults
 
-**3. Fuel Depletion Detection**
-- Monitors temperature drop patterns
-- Detects fuel exhaustion within 30 seconds
-- Extended purge cycle on shutdown
-- Prevents pump damage and carbon buildup
-
-### Emergency Shutdown Procedure
-
-When any critical condition detected:
-1. **Immediate** fuel cutoff (pump OFF, glow plug OFF)
-2. **Maximum** cooling (all fans 100%, coolant pump ON)
-3. Enter ERROR state with descriptive message
-4. Extended cooling period (3+ minutes)
-5. Prevent restart until manual intervention
-6. Log event for analysis
+**ESP32 Smart Layer (zone-level safety)**:
+- Zone overheat: floor > 50°C → close valve, water > 85°C → close valve
+- Coolant overheat: > 95°C → send stop to Autoterm
+- UART watchdog: no response for 30s → error state
+- DS18B20 sensor validation
+- ESP32 hardware watchdog timer
+- Guarantee sufficient coolant flow: open Kalori circuit if needed.
 
 **See [SAFETY.md](SAFETY.md) for complete safety documentation.**
 
@@ -211,9 +208,9 @@ When any critical condition detected:
 
 | Profile | Power | Fuel | Noise | Use Case |
 |---------|-------|------|-------|----------|
-| Eco | 30% | 0.15 L/hr | Very quiet | Overnight, maintenance |
-| Normal | 60% | 0.30 L/hr | Moderate | General use, balanced |
-| Boost | 100% | 0.50 L/hr | Louder | Quick warmup, extreme cold |
+| Eco | ~30% | 0.18 L/hr | Very quiet | Overnight, maintenance |
+| Normal | ~60% | 0.35 L/hr | Moderate | General use, balanced |
+| Boost | 100% | 0.62 L/hr | Louder | Quick warmup, extreme cold |
 
 ---
 
@@ -222,36 +219,37 @@ When any critical condition detected:
 ### Physical Components
 
 **Heater Unit** (exterior mounting)
-- Chinese 2-5kW hydronic diesel heater
+- Autoterm Flow 5D (12V, 5kW hydronic)
+- Installed per Autoterm installation manual
 - Exhaust vented safely outside
 - Fuel line from diesel tank
 - 12V power from van battery
 
-**Controller** (interior mounting)
-- ESP32 board in weatherproof enclosure
-- 6x DS18B20 temperature sensors
-- MOSFETs/relays for component control
+**ESP32 Controller** (interior mounting)
+- ESP32 board (or LilyGo T-Display S3)
+- UART cable to Autoterm control panel connector
+- 5–6x DS18B20 temperature sensors
 - WiFi access from living area
 
-**Distribution System**
-- 3-way motorized valves for zone control
-- Coolant circulation pumps
-- Heat exchanger with fans
+**Zone Distribution System**
+- Zone valves for floor and water circuits
+- Heat exchanger with fan for cabin air
 - Floor heating loops
 - Water tank heating coil
 
 ### Typical Costs
 
-| Component | Cost (USD) |
+| Component | Cost (EUR) |
 |-----------|------------|
-| Chinese diesel heater (5kW) | $250 |
-| ESP32 + components | $80 |
-| Temperature sensors (6x) | $15 |
-| Valves, pumps, hardware | $135 |
-| Installation materials | $50 |
-| **Total System** | **$530** |
+| Autoterm Flow 5D (12V) | €600 |
+| ESP32 + components | €25 |
+| Temperature sensors (6x) | €15 |
+| Zone valves, hardware | €110 |
+| Heat exchanger + fan | €50 |
+| Installation materials | €50 |
+| **Total System** | **~€850** |
 
-**Compare to**: Webasto Air Top 2000 ($2000+) with basic control
+**Compare to**: Webasto Thermo Top Evo (€1200+) with locked-down ecosystem, no DIY control
 
 ---
 
@@ -383,17 +381,17 @@ hydronic-heater/
 
 ### Current Implementation
 - Connectivity features framework only (not yet implemented)
+- AutotermUART class pending (awaiting official protocol documentation)
 - Single OneWire bus (all sensors share one pin)
 - No web interface (planned future)
 - Limited to 4 schedules (extendable)
 - No fuel level sensor integration (planned)
 
-### Chinese Heater Limitations
-- Inconsistent build quality across models
-- May require calibration for specific heater
-- Some noise/vibration at high power
-- Limited manufacturer documentation
-- Warranty implications of controller replacement
+### Autoterm Integration Notes
+- Requires official Autoterm protocol documentation (request from support@autoterm.com)
+- UART baud rate and frame format to be verified with documentation
+- Some Autoterm firmware versions may differ in protocol details
+- Standard Autoterm control panel displaced by ESP32 (or can be retained in parallel)
 
 ---
 
@@ -474,10 +472,10 @@ pio run --target upload && pio device monitor
 ```
 
 ### Critical Temperatures
-- Burning chamber: Normal 600°C, Max 900°C
-- Coolant: Normal 40-75°C, Critical 95°C
-- Floor: Target 25°C, Max 45°C
-- Water: Target 45°C, Max 80°C
+- Combustion temp: Monitored by Autoterm (visible via UART telemetry)
+- Coolant: Normal 40-75°C, Critical 95°C (ESP32 sends stop)
+- Floor zone: Target 25°C, Max 50°C (ESP32 closes valve)
+- Water zone: Target 45°C, Max 85°C (ESP32 closes valve)
 
 ### Emergency Procedures
 1. Type `stop` in serial monitor OR
@@ -488,31 +486,39 @@ pio run --target upload && pio device monitor
 
 ## Project Roadmap
 
-**✅ Phase 1: Core System** (COMPLETE)
-- Base controller with safety features
+**✅ Phase 1: Core Design** (COMPLETE)
+- Base controller design with safety features
 - Design documentation
 - Component architecture
 
-**🚧 Phase 2: Extended Features** (IN PROGRESS)
-- Connectivity implementation
-- Multi-zone control
-- Scheduling
+**🔄 Phase 1.5: Autoterm Pivot** (CURRENT)
+- Pivot from HCalory to Autoterm Flow 5D
+- Updated documentation for hybrid architecture
+- Procurement and protocol documentation request
 
-**📋 Phase 3: Advanced Features** (PLANNED)
-- Web interface
+**📋 Phase 2: Autoterm Integration** (NEXT)
+- AutotermUART communication class
+- Simplified state machine
+- UART telemetry parsing
+- Basic start/stop/setpoint control
+
+**📋 Phase 3: Smart Layer** (PLANNED)
+- PID zone temperature control
+- Multi-zone valve management
+- MQTT / Paku-IoT integration
+- Scheduling and power profiles
+
+**💡 Phase 4: Advanced Features** (FUTURE)
+- Web configuration interface
 - Analytics and logging
-- Maintenance tracking
-
-**💡 Phase 4: Smart Features** (FUTURE)
-- Machine learning
+- Grafana dashboards
 - Mobile app
-- Voice control
 
 ---
 
-**Last Updated**: December 28, 2025  
-**Version**: 1.0  
-**Status**: Core implementation complete, extended features in development
+**Last Updated**: February 12, 2026  
+**Version**: 2.0  
+**Status**: Pivoting to Autoterm Flow 5D hybrid architecture
 
 **For questions, issues, or contributions, please use the GitHub repository.**
 

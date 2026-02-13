@@ -1,8 +1,8 @@
 # System Design Document
 ## Hydronic Diesel Heater Controller
 
-**Version:** 1.0  
-**Date:** December 2025  
+**Version:** 2.0  
+**Date:** February 2026  
 **Author:** ESP32 Controller Project
 
 ---
@@ -26,15 +26,23 @@
 
 ### 1.1 Purpose
 
-This document describes the system design for an ESP32-based controller that replaces the original controller in a hydronic diesel heater. The system provides complete autonomous control over all heater components with safety monitoring and efficient operation.
+This document describes the system design for an ESP32-based smart controller that works alongside the **Autoterm Flow 5D** hydronic diesel heater. The ESP32 provides a multi-zone heating control layer, PID temperature feedback, scheduling, and cloud integration, while the Autoterm certified controller handles all combustion-critical functions.
+
+> **Architecture change (February 2026)**: This design was originally based on full hardware replacement of a Chinese heater (direct glow plug, fuel pump, air fan control). It has been updated to use a **hybrid architecture** with the Autoterm Flow 5D. Combustion components are now managed by Autoterm; the ESP32 manages the smart application layer. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for details.
 
 ### 1.2 Scope
 
-The controller manages:
-- **Combustion system**: Glow plug, diesel pump, air supply
-- **Heat transfer**: Coolant circulation, heat exchanger
-- **Monitoring**: Multiple temperature sensors, optional flow sensor
-- **Safety**: Overtemperature protection, ignition monitoring, fault detection
+The ESP32 controller manages:
+- **Autoterm communication**: UART commands for start/stop, power setpoint, telemetry
+- **Zone distribution**: Multi-zone valve control (floor, air, water)
+- **Temperature control**: PID feedback loop using DS18B20 sensor network
+- **Cloud integration**: MQTT / Paku-IoT telemetry and remote control
+- **Scheduling**: Timed heating with power profiles
+
+The Autoterm Flow 5D controller manages (delegated):
+- **Combustion system**: Glow plug, diesel pump, combustion air fan
+- **Combustion safety**: Flame monitoring, overheat protection, ignition timeout
+- **Fuel metering**: Variable fuel delivery (0.18–0.62 L/hr)
 
 ### 1.3 Design Goals
 
@@ -513,17 +521,21 @@ status\n   - Print current system status
 ```
 ===== Heater Status =====
 State: RUNNING
+Autoterm: RUNNING (power: 45%)
 Temperatures:
-  Burning Chamber: 625.5 °C
-  Coolant Input: 65.2 °C
-  Coolant Output: 72.8 °C
-  Air: 22.3 °C
-Components:
-  Glow Plug: OFF
-  Diesel Pump: ON
-  Air Fan: 192/255
-  Coolant Pump: ON
-  Heat Exchanger Fan: 255/255
+  Cabin Air: 19.8 °C
+  Floor Supply: 38.5 °C
+  Floor Return: 32.1 °C
+  Water Tank: 42.3 °C
+Autoterm Telemetry:
+  Combustion Temp: 185 °C
+  Fan RPM: 3200
+  Fuel Rate: 0.35 L/hr
+  Supply Voltage: 12.8 V
+Zones:
+  Floor Valve: OPEN
+  Water Valve: OPEN
+  Heat Exchanger Fan: 180/255
   Coolant Flow: 3.2 L/min
 ========================
 ```
@@ -715,16 +727,18 @@ Components:
 
 ## Conclusion
 
-This design provides a solid foundation for a safe, reliable hydronic heater controller. The modular architecture allows for easy customization to specific heater models, while the safety-first approach ensures robust operation in this critical application.
+This design provides a solid foundation for a smart hydronic heater controller using a **hybrid architecture**. The Autoterm Flow 5D handles certified combustion safety, while the ESP32 provides the intelligent zone control, scheduling, and cloud integration layer. This separation of concerns is both safer (certified combustion control) and more maintainable (ESP32 firmware focuses on the application layer).
 
 **Next Steps**:
-1. Review and approve design document
-2. Validate with specific heater model requirements
-3. Create test plan for hardware integration
-4. Consider adding design diagrams (UML, timing diagrams)
-5. User testing and feedback collection
+1. Procure Autoterm Flow 5D and request integration documentation
+2. Implement AutotermUART communication class
+3. Simplify state machine (remove combustion states)
+4. Implement PID zone control with UART power setpoint
+5. Integrate MQTT / Paku-IoT telemetry
+6. User testing and feedback collection
 
 ---
 
 **Document History**:
-- v1.0 (2025-12-28): Initial design document created
+- v2.0 (2026-02-12): Updated for Autoterm Flow 5D hybrid architecture
+- v1.0 (2025-12-28): Initial design document created (HCalory full replacement)

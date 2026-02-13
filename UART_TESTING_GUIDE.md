@@ -1,6 +1,8 @@
 # UART Protocol Testing Guide
 ## Hydronic Diesel Heater - Critical Decision Point
 
+> **⚠️ ARCHIVED (February 2026)**: This guide is **no longer needed**. The project has pivoted from the HCalory W51 to the **Autoterm Flow 5D**, which provides official UART protocol documentation. See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) for the current integration approach. This document is retained for historical reference only.
+
 **Version:** 1.0  
 **Date:** December 2025  
 **Priority:** 🔬 PHASE 0 - DO THIS FIRST
