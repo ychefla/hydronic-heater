@@ -5,7 +5,7 @@ Heater-specific information for the Autoterm Flow 5D. For project overview and v
 ## Specifications
 
 | Parameter | Value |
-|-----------|-------|
+| --------- | ----- |
 | Model | Autoterm Flow 5D (liquid/hydronic) |
 | Heat output | 1.4 – 5.0 kW (continuously variable) |
 | Voltage | 12V DC |
@@ -32,7 +32,7 @@ The certified Autoterm controller handles all combustion:
 
 ### Physical Connection
 
-```
+```text
 ESP32                    Autoterm Flow 5D
 ─────                    ────────────────
 GPIO 16 (RX2) ◄──────── TX
@@ -49,7 +49,7 @@ Connection is made at the Autoterm control panel connector.
 
 Binary frame-based protocol (community-documented, verify with official docs):
 
-```
+```text
 ┌──────┬────────┬─────────┬──────────┬──────────┐
 │ SYNC │ LENGTH │ COMMAND │   DATA   │ CHECKSUM │
 │ 0xAA │ 1 byte │ 1 byte  │ N bytes  │ 1 byte   │
@@ -59,7 +59,7 @@ Binary frame-based protocol (community-documented, verify with official docs):
 ### Commands
 
 | Command | Direction | Description |
-|---------|-----------|-------------|
+| ------- | --------- | ----------- |
 | Start heater | ESP32 → Autoterm | Begin startup sequence |
 | Stop heater | ESP32 → Autoterm | Begin shutdown sequence |
 | Set power level | ESP32 → Autoterm | Set heat output (%) |
@@ -70,7 +70,7 @@ Binary frame-based protocol (community-documented, verify with official docs):
 ### Telemetry from UART
 
 | Parameter | Description |
-|-----------|-------------|
+| --------- | ----------- |
 | Heater state | Off / Starting / Running / Stopping / Error |
 | Combustion temp | Internal temperature |
 | Fan RPM | Combustion fan speed |
@@ -85,7 +85,7 @@ Binary frame-based protocol (community-documented, verify with official docs):
 
 Autoterm provides integration documentation to integrators on request:
 
-- **Email**: support@autoterm.com
+- **Email**: <support@autoterm.com>
 - **Website**: [autoterm.com](https://autoterm.com)
 - Dealers can also assist with technical documentation
 
@@ -101,7 +101,7 @@ Selected over alternatives because:
 - **Quality** — Estonian manufacturer, proper engineering
 
 | | Autoterm Flow 5D | Chinese heaters | Webasto/Eberspächer |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Protocol access | ✅ Available | ❌ Proprietary | ❌ Locked |
 | DIY integration | ✅ Supported | ⚠️ Reverse-engineer | ❌ Not intended |
 | Certifications | ✅ E-mark, CE | ⚠️ Variable | ✅ Premium |

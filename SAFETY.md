@@ -5,7 +5,7 @@ Safety requirements for the ESP32 heater controller. Combustion safety is delega
 ## Responsibility Split
 
 | Domain | Owner | Notes |
-|--------|-------|-------|
+| ------ | ----- | ----- |
 | Combustion (flame, ignition, fuel metering) | **Autoterm** (certified) | E-mark, CE — not our concern |
 | Combustion overheat | **Autoterm** | Internal sensors + shutdown logic |
 | Supply voltage protection | **Autoterm** | Internal |
@@ -23,7 +23,7 @@ Safety requirements for the ESP32 heater controller. Combustion safety is delega
 If coolant stops flowing while the heater runs, coolant can boil and cause damage or injury.
 
 | Requirement | Detail |
-|-------------|--------|
+| ----------- | ------ |
 | Sensor | Flow sensor on coolant return (GPIO 13) |
 | Trigger | Flow drops below minimum threshold while Autoterm is running |
 | Action | Send stop command to Autoterm, enter ERROR state |
@@ -37,7 +37,7 @@ If coolant stops flowing while the heater runs, coolant can boil and cause damag
 Prevent coolant from reaching boiling point. Coolant temperature source depends on what Autoterm provides via UART.
 
 | Requirement | Detail |
-|-------------|--------|
+| ----------- | ------ |
 | Source | Autoterm UART telemetry (preferred) or dedicated DS18B20 (if needed) |
 | Trigger | Coolant temperature > 95°C |
 | Action | Send stop command to Autoterm, enter ERROR state |
@@ -53,7 +53,7 @@ Prevent coolant from reaching boiling point. Coolant temperature source depends 
 If communication with Autoterm is lost, the ESP32 cannot monitor or control the heater.
 
 | Requirement | Detail |
-|-------------|--------|
+| ----------- | ------ |
 | Trigger | No valid UART response from Autoterm for 30 seconds |
 | Action | Send stop command (best-effort), enter ERROR state, publish MQTT alert |
 | Recovery | Automatic retry after 60 seconds; manual reset if persistent |
@@ -65,7 +65,7 @@ If communication with Autoterm is lost, the ESP32 cannot monitor or control the 
 Protect against ESP32 firmware hang.
 
 | Requirement | Detail |
-|-------------|--------|
+| ----------- | ------ |
 | Implementation | Hardware watchdog timer (WDT), 10-second timeout |
 | Trigger | Main loop fails to feed watchdog |
 | Action | Hardware reset → ESP32 reboots into safe state (heater left in last state; Autoterm has its own timeout) |
@@ -77,7 +77,7 @@ Protect against ESP32 firmware hang.
 Detect faulty sensor readings before acting on them.
 
 | Requirement | Detail |
-|-------------|--------|
+| ----------- | ------ |
 | Flow sensor | Validate signal is within expected range; ignore single glitches |
 | Temperature | Reject readings outside physically possible range (e.g. −50°C to +150°C) |
 | Action on failure | Log warning; if persistent (> 10s), treat as sensor failure → stop heater |

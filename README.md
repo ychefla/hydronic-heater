@@ -14,7 +14,7 @@ Cabin temperature is measured by RuuviTag (via paku-core BLE).
 
 ## Piping Layout
 
-```
+```text
 Autoterm Flow 5D (built-in pump + heater)
          │ hot coolant out
          ▼
@@ -37,7 +37,7 @@ Autoterm Flow 5D (built-in pump + heater)
 ## Hardware (v1)
 
 | Component | Purpose | Notes |
-|-----------|---------|-------|
+| --------- | ------- | ----- |
 | Autoterm Flow 5D (12V) | Heater + circulation pump | See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) |
 | ESP32 (LilyGo T-Display S3) | Smart controller | Runs as paku-core add-on (compile-time flag) |
 | Flow sensor | Coolant flow safety | GPIO 13 |
@@ -46,7 +46,7 @@ Autoterm Flow 5D (built-in pump + heater)
 ### Temperature Sources
 
 | Measurement | Source | v1? |
-|-------------|--------|-----|
+| ----------- | ------ | --- |
 | Cabin air | RuuviTag via paku-core BLE | ✅ |
 | Combustion temp | Autoterm UART telemetry | ✅ |
 | Fan RPM | Autoterm UART telemetry | ✅ |
@@ -60,7 +60,7 @@ Autoterm Flow 5D (built-in pump + heater)
 ### Heating Circuits
 
 | Circuit | Purpose | v1 Control |
-|---------|---------|------------|
+| ------- | ------- | ---------- |
 | Floor heating | Underfloor radiant loops | Manual ball valve |
 | Air heating | Cabin air via heat exchanger + fan | Manual ball valve, fan manual (off/low/high) |
 | Water heating | On-demand hot water via copper plate | Manual ball valve |
@@ -68,6 +68,7 @@ Autoterm Flow 5D (built-in pump + heater)
 ## v1 Scope
 
 **In scope:**
+
 - Autoterm UART communication (start, stop, set power, read telemetry)
 - Publish telemetry to Paku-IoT via MQTT
 - Coolant flow monitoring (flow sensor) → stop heater if flow drops
@@ -82,7 +83,7 @@ Autoterm Flow 5D (built-in pump + heater)
 See [SAFETY.md](SAFETY.md). Summary:
 
 | Risk | Owner | Action |
-|------|-------|--------|
+| ---- | ----- | ------ |
 | Combustion (overheat, flame, fuel) | Autoterm (certified) | Delegated |
 | Coolant flow loss | ESP32 | Flow sensor → stop Autoterm |
 | Coolant overheat (>95°C) | ESP32 | Stop Autoterm |
@@ -93,13 +94,14 @@ See [SAFETY.md](SAFETY.md). Summary:
 
 The heater controller is an **optional add-on module** for paku-core, enabled via a compile-time flag. Not every paku-core instance has a heater — some may lack BLE, some serve other purposes.
 
-```
+```text
 paku-core (base)          ← WiFi, MQTT, display, OTA
   └── heater add-on       ← AutotermUART, flow safety (compile-time opt-in)
   └── (other add-ons)     ← future modules
 ```
 
 **When enabled** (on the paku-core instance wired to the Autoterm):
+
 - Shares WiFi, MQTT, display, and BLE stack — no extra device
 - Cabin temp from RuuviTag directly available (no MQTT round-trip)
 - Heater status on the existing display
@@ -120,7 +122,7 @@ pio device monitor   # Serial (115200 baud)
 ## Cost Estimate (v1, EUR)
 
 | Item | Cost |
-|------|------|
+| ---- | ---- |
 | Autoterm Flow 5D (12V) | ~€600 |
 | Flow sensor | ~€15 |
 | Wiring, connectors | ~€20 |
@@ -131,7 +133,7 @@ pio device monitor   # Serial (115200 baud)
 ## Documentation
 
 | Document | Content |
-|----------|---------|
+| -------- | ------- |
 | [README.md](README.md) | Project overview, hardware, v1 scope (this file) |
 | [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) | Autoterm specs, UART protocol |
 | [SAFETY.md](SAFETY.md) | Safety requirements |

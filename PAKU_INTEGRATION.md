@@ -7,7 +7,7 @@ MQTT integration between the ESP32 heater controller and Paku-IoT. For project o
 Base prefix: `paku/devices/{device_id}/`
 
 | Topic suffix | Direction | QoS | Retained | Description |
-|-------------|-----------|-----|----------|-------------|
+| ------------ | --------- | --- | -------- | ----------- |
 | `state` | Device → Broker | 1 | Yes | Online/offline (LWT sets `offline`) |
 | `telemetry/heater` | Device → Broker | 0 | No | Heater telemetry (periodic) |
 | `cmd` | Broker → Device | 1 | No | Commands (start, stop, set power) |
@@ -44,7 +44,7 @@ Published every 10 seconds while heater is running:
 ```
 
 | Command | Parameters | Description |
-|---------|------------|-------------|
+| ------- | ---------- | ----------- |
 | `start` | `power_level` (optional, %) | Start heater at given power (default: 50%) |
 | `stop` | — | Stop heater |
 | `set_power` | `power_level` (%) | Adjust power while running |
@@ -61,7 +61,7 @@ Published every 10 seconds while heater is running:
 ```
 
 | Alert | Safety Req | Trigger |
-|-------|-----------|---------|
+| ----- | ---------- | ------- |
 | `COOLANT_FLOW_LOSS` | SAFE-F1 | Flow sensor below threshold |
 | `COOLANT_OVERHEAT` | SAFE-T1 | Coolant > 95°C |
 | `UART_TIMEOUT` | SAFE-C1 | No Autoterm response for 30s |
@@ -70,7 +70,7 @@ Published every 10 seconds while heater is running:
 ## LWT (Last Will and Testament)
 
 | Setting | Value |
-|---------|-------|
+| ------- | ----- |
 | Topic | `paku/devices/{device_id}/state` |
 | Payload | `offline` |
 | QoS | 1 |
@@ -81,7 +81,7 @@ On connect, device publishes `online` to the same topic (retained).
 ## Connection
 
 | Parameter | Value |
-|-----------|-------|
+| --------- | ----- |
 | Broker | Configured in `secrets.h` |
 | Port | 1883 (or 8883 for TLS) |
 | Client ID | `heater-{mac_suffix}` |

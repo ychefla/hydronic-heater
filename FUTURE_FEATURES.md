@@ -43,7 +43,7 @@ ESP32-controlled fan for cabin air heating (currently manual: off/low/high).
 Named presets for Autoterm power setpoint:
 
 | Profile | Power | Use Case |
-|---------|-------|----------|
+| ------- | ----- | -------- |
 | Eco | ~30% (~0.18 L/hr) | Overnight, quiet |
 | Normal | ~60% (~0.35 L/hr) | General use |
 | Boost | 100% (~0.62 L/hr) | Quick warmup |
