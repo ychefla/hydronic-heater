@@ -39,7 +39,7 @@ Autoterm Flow 5D (built-in pump + heater)
 | Component | Purpose | Notes |
 |-----------|---------|-------|
 | Autoterm Flow 5D (12V) | Heater + circulation pump | See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) |
-| ESP32 (LilyGo T-Display S3) | Smart controller | Shared with paku-core (recommended) |
+| ESP32 (LilyGo T-Display S3) | Smart controller | Runs as paku-core add-on (compile-time flag) |
 | Flow sensor | Coolant flow safety | GPIO 13 |
 | UART cable | ESP32 ↔ Autoterm | GPIO 16 RX, GPIO 17 TX |
 
@@ -89,19 +89,25 @@ See [SAFETY.md](SAFETY.md). Summary:
 | UART communication loss | ESP32 | 30s timeout → stop Autoterm |
 | ESP32 hang | Hardware watchdog | Reset to safe state |
 
-## Architecture Decision: paku-core Integration
+## Architecture: paku-core Add-on
 
-**Recommendation: same ESP32 as paku-core** (LilyGo T-Display S3).
+The heater controller is an **optional add-on module** for paku-core, enabled via a compile-time flag. Not every paku-core instance has a heater — some may lack BLE, some serve other purposes.
 
-- Shares WiFi, MQTT, display, and BLE stack
+```
+paku-core (base)          ← WiFi, MQTT, display, OTA
+  └── heater add-on       ← AutotermUART, flow safety (compile-time opt-in)
+  └── (other add-ons)     ← future modules
+```
+
+**When enabled** (on the paku-core instance wired to the Autoterm):
+- Shares WiFi, MQTT, display, and BLE stack — no extra device
 - Cabin temp from RuuviTag directly available (no MQTT round-trip)
-- Heater status on existing display
+- Heater status on the existing display
 - AutotermUART module is self-contained (UART + safety logic)
-- One less device to power and maintain
 
-If separate: cabin temperature comes via MQTT from paku-core → adds latency and a hard dependency.
+**When not enabled** — paku-core operates normally without heater code.
 
-**Decision TBD** — depends on paku-core pin availability and firmware complexity tradeoff.
+**Build flag**: `platformio.ini` build flag (e.g. `-D HEATER_ENABLED`) controls inclusion. Heater-specific code compiles out cleanly when disabled.
 
 ## Build
 
