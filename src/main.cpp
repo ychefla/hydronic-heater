@@ -21,12 +21,11 @@
 #include "config.h"
 #include "autoterm_uart.h"
 #include "heater_safety.h"
+#include "coolant_temp_sensor.h"
+#include "flow_sensor.h"
 
 #ifdef EMULATOR_MODE
 #include "autoterm_emulator.h"
-#else
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #endif
 
 // ---------------------------------------------------------------------------
@@ -35,24 +34,21 @@
 static AutotermUart   heater(Serial2, HEATER_UART_RX_PIN, HEATER_UART_TX_PIN);
 
 #ifdef EMULATOR_MODE
-// In emulator mode: safety runs without flow sensor and DS18B20
-// (the emulator can simulate faults via serial commands instead)
-static HeaterSafety   safety(heater, -1);
+// In emulator mode: safety runs with both sensors simulated.
+// Flow sensor simulation lets us test SAFE-F1 trip/recovery too.
+static HeaterSafety   safety(heater, true);  // has flow sensor (simulated)
 
 // Emulator on Serial1 — cross-wired internally:
 //   Emulator TX (GPIO 16) → Driver RX (GPIO 16)
 //   Driver TX (GPIO 17) → Emulator RX (GPIO 17)
 static AutotermEmulator emulator(Serial1, HEATER_UART_TX_PIN, HEATER_UART_RX_PIN);
-
-// Simulated coolant temperature (controllable via serial commands)
-static float simCoolantTemp = 45.0f;
 #else
-static HeaterSafety   safety(heater, FLOW_SENSOR_PIN);
-
-// DS18B20 on coolant return line
-static OneWire        oneWire(ONEWIRE_BUS_PIN);
-static DallasTemperature ds18b20(&oneWire);
+static HeaterSafety   safety(heater, FLOW_SENSOR_PIN >= 0);
 #endif
+
+// Sensor drivers (abstracted — real or simulated based on build mode)
+static CoolantTempSensor coolantSensor(ONEWIRE_BUS_PIN);
+static FlowSensor        flowSensor(FLOW_SENSOR_PIN);
 
 // Serial command buffer
 static String commandBuffer;
@@ -103,15 +99,12 @@ void setup() {
     // Initialize safety monitor
     safety.begin();
 
-#ifndef EMULATOR_MODE
-    // Initialize DS18B20 (only in real hardware mode)
-    ds18b20.begin();
-    int sensorCount = ds18b20.getDeviceCount();
-    Serial.printf("[DS18B20] Found %d sensor(s) on GPIO %d\n",
-                  sensorCount, ONEWIRE_BUS_PIN);
-#else
-    Serial.println("[Emulator] DS18B20 simulated — use 'coolant <temp>' to set");
-    safety.feedCoolantTemp(simCoolantTemp);
+    // Initialize sensor drivers
+    coolantSensor.begin();
+    flowSensor.begin();
+
+#ifdef EMULATOR_MODE
+    Serial.println("[Sensors] Simulated — use 'coolant' / 'flow' commands");
 #endif
 
     printHelp();
@@ -132,17 +125,15 @@ void loop() {
     // 1. Update Autoterm UART communication
     heater.update();
 
-    // 2. Read temperature and feed to safety monitor
+    // 2. Read sensors and feed to safety monitor
     if (now - lastTempRead >= TEMP_READ_INTERVAL) {
         lastTempRead = now;
-#ifdef EMULATOR_MODE
-        // Simulated coolant temp — already set via commands
-        safety.feedCoolantTemp(simCoolantTemp);
-#else
-        ds18b20.requestTemperatures();
-        float coolantTemp = ds18b20.getTempCByIndex(0);
-        safety.feedCoolantTemp(coolantTemp);
-#endif
+
+        float coolant = coolantSensor.read();
+        safety.feedCoolantTemp(coolant);
+
+        float flow = flowSensor.update();
+        safety.feedFlowRate(flow, flowSensor.lastPulseTime());
     }
 
     // 3. Run safety checks
@@ -182,7 +173,8 @@ static void processCommand(const String& cmd) {
 #ifdef EMULATOR_MODE
     // Emulator-specific commands (prefixed with 'emu' or fault injection)
     if (c.startsWith("emu ") || c.startsWith("coolant ") ||
-        c.startsWith("error ") || c.startsWith("voltage ")) {
+        c.startsWith("error ") || c.startsWith("voltage ") ||
+        c.startsWith("flow ")) {
         processEmulatorCommand(c);
         return;
     }
@@ -280,7 +272,8 @@ static void printStatus() {
     Serial.printf("  Emu power:     %d\n", emulator.getPowerLevel());
     Serial.printf("  Emu RX/TX:     %lu / %lu frames\n",
                   emulator.getFramesRx(), emulator.getFramesTx());
-    Serial.printf("  Sim coolant:   %.1f °C\n", simCoolantTemp);
+    Serial.printf("  Sim coolant:   %.1f °C\n", coolantSensor.lastReading());
+    Serial.printf("  Sim flow:      %.1f L/min\n", flowSensor.getFlowRate());
 #endif
 
     Serial.println("---------------------");
@@ -294,9 +287,15 @@ static void printStatus() {
 static void processEmulatorCommand(const String& cmd) {
     if (cmd.startsWith("coolant ")) {
         float temp = cmd.substring(8).toFloat();
-        simCoolantTemp = temp;
-        safety.feedCoolantTemp(simCoolantTemp);
-        Serial.printf("[Sim] Coolant temperature set to %.1f °C\n", simCoolantTemp);
+        coolantSensor.setSimulated(temp);
+        safety.feedCoolantTemp(temp);
+        Serial.printf("[Sim] Coolant temperature set to %.1f °C\n", temp);
+    }
+    else if (cmd.startsWith("flow ")) {
+        float lpm = cmd.substring(5).toFloat();
+        flowSensor.setSimulated(lpm);
+        safety.feedFlowRate(lpm);
+        Serial.printf("[Sim] Flow rate set to %.1f L/min\n", lpm);
     }
     else if (cmd == "error clear" || cmd == "error none") {
         emulator.injectError(AutotermError::None);
@@ -350,6 +349,8 @@ static void processEmulatorCommand(const String& cmd) {
 static void printEmulatorHelp() {
     Serial.println("\n--- Emulator Commands ---");
     Serial.println("  coolant <°C>      — Set simulated coolant temperature");
+    Serial.println("  flow <L/min>      — Set simulated coolant flow rate");
+    Serial.println("  flow 0            — Simulate flow loss (triggers SAFE-F1)");
     Serial.println("  error overheat    — Inject E01 overheat error");
     Serial.println("  error voltage     — Inject E02 voltage error");
     Serial.println("  error glowplug    — Inject E03 glow plug error");

@@ -5,12 +5,6 @@
 
 #include "heater_safety.h"
 
-// Static ISR counter
-volatile uint32_t HeaterSafety::flowPulseCount_ = 0;
-
-// Flow sensor calibration (typical YF-S201 or similar)
-static constexpr float FLOW_PULSES_PER_LITER = 7.5f;
-
 // ---------------------------------------------------------------------------
 // Trip name
 // ---------------------------------------------------------------------------
@@ -29,40 +23,28 @@ const char* safetyTripName(SafetyTrip trip) {
 // Constructor / begin
 // ---------------------------------------------------------------------------
 
-HeaterSafety::HeaterSafety(AutotermUart& heater, int flowPin)
+HeaterSafety::HeaterSafety(AutotermUart& heater, bool hasFlowSensor)
     : heater_(heater)
-    , flowPin_(flowPin)
+    , hasFlowSensor_(hasFlowSensor)
     , coolantTemp_(NAN)
     , coolantValid_(false)
     , flowRate_(0.0f)
-    , lastFlowCalcMs_(0)
     , lastFlowPulseMs_(0)
     , tripReason_(TRIP_NONE)
     , lastCheckMs_(0) {
 }
 
 void HeaterSafety::begin() {
-    if (flowPin_ >= 0) {
-        pinMode(flowPin_, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(flowPin_), flowPulseISR, FALLING);
-        lastFlowPulseMs_ = millis();
-        Serial.printf("[HeaterSafety] Flow sensor on GPIO %d\n", flowPin_);
+    if (hasFlowSensor_) {
+        Serial.println("[HeaterSafety] Flow sensor enabled — expecting feedFlowRate() calls");
     } else {
-        Serial.println("[HeaterSafety] No flow sensor configured");
+        Serial.println("[HeaterSafety] No flow sensor — SAFE-F1 skipped");
     }
     Serial.println("[HeaterSafety] Initialized — all checks active");
 }
 
 // ---------------------------------------------------------------------------
-// ISR
-// ---------------------------------------------------------------------------
-
-void IRAM_ATTR HeaterSafety::flowPulseISR() {
-    flowPulseCount_++;
-}
-
-// ---------------------------------------------------------------------------
-// feedCoolantTemp
+// feedCoolantTemp / feedFlowRate
 // ---------------------------------------------------------------------------
 
 void HeaterSafety::feedCoolantTemp(float tempC) {
@@ -72,6 +54,16 @@ void HeaterSafety::feedCoolantTemp(float tempC) {
     }
     coolantTemp_  = tempC;
     coolantValid_ = true;
+}
+
+void HeaterSafety::feedFlowRate(float lpm, unsigned long pulseTime) {
+    flowRate_ = lpm;
+    if (pulseTime > 0) {
+        lastFlowPulseMs_ = pulseTime;
+    } else if (lpm > 0.0f) {
+        // No explicit timestamp — assume flow is present now
+        lastFlowPulseMs_ = millis();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -108,24 +100,6 @@ void HeaterSafety::update() {
         checkCoolantOverheat();
         checkFlowLoss();
     }
-
-    // Update flow rate calculation
-    if (flowPin_ >= 0) {
-        unsigned long elapsed = now - lastFlowCalcMs_;
-        if (elapsed >= 1000) {
-            noInterrupts();
-            uint32_t pulses = flowPulseCount_;
-            flowPulseCount_ = 0;
-            interrupts();
-
-            if (pulses > 0) {
-                lastFlowPulseMs_ = now;
-            }
-
-            flowRate_ = (pulses / FLOW_PULSES_PER_LITER) * (60000.0f / elapsed);
-            lastFlowCalcMs_ = now;
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -143,7 +117,7 @@ void HeaterSafety::checkCoolantOverheat() {
 }
 
 void HeaterSafety::checkFlowLoss() {
-    if (flowPin_ < 0) return;  // No flow sensor
+    if (!hasFlowSensor_) return;  // No flow sensor
 
     unsigned long now = millis();
     if (lastFlowPulseMs_ > 0 && (now - lastFlowPulseMs_) > FLOW_TIMEOUT_MS) {

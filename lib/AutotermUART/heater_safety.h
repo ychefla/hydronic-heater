@@ -11,9 +11,10 @@
  * All safety actions are STOP commands — the heater manages its own
  * safe shutdown sequence (cooling fan etc.).
  *
- * @note This module is intentionally independent of the main controller
- *       logic. It reads sensors directly and calls shutdown on the
- *       AutotermUart driver.
+ * @note This module does NOT own sensors. External sensor drivers
+ *       (CoolantTempSensor, FlowSensor) feed values in via
+ *       feedCoolantTemp() and feedFlowRate(). This keeps the safety
+ *       layer independent from hardware/emulator details.
  */
 
 #ifndef HEATER_SAFETY_H
@@ -58,13 +59,13 @@ class HeaterSafety {
 public:
     /**
      * @param heater    Reference to the AutotermUart driver.
-     * @param flowPin   GPIO pin for the coolant flow sensor (pulse counter).
-     *                  Pass -1 if no flow sensor installed.
+     * @param hasFlowSensor  True if a flow sensor is installed.
+     *                       When false, SAFE-F1 checks are skipped.
      */
-    explicit HeaterSafety(AutotermUart& heater, int flowPin = -1);
+    explicit HeaterSafety(AutotermUart& heater, bool hasFlowSensor = false);
 
     /**
-     * @brief Initialize GPIO for flow sensor. Call once in setup().
+     * @brief Initialize safety monitor. Call once in setup().
      */
     void begin();
 
@@ -85,6 +86,18 @@ public:
      * @param tempC  Temperature in °C. Pass NAN if sensor invalid.
      */
     void feedCoolantTemp(float tempC);
+
+    /**
+     * @brief Feed the coolant flow rate from an external FlowSensor.
+     *
+     * Call this whenever the FlowSensor updates. The safety monitor
+     * uses the flow rate and the timestamp to detect flow loss.
+     *
+     * @param lpm        Flow rate in litres per minute.
+     * @param pulseTime  millis() timestamp of the last detected pulse.
+     *                   Pass 0 if unknown.
+     */
+    void feedFlowRate(float lpm, unsigned long pulseTime = 0);
 
     /**
      * @brief Clear a trip and return to normal monitoring.
@@ -114,23 +127,16 @@ public:
     /** @brief Current flow rate (L/min), 0 if no sensor. */
     float getFlowRate() const { return flowRate_; }
 
-    // -----------------------------------------------------------------------
-    // Flow sensor ISR (public for IRAM_ATTR linkage)
-    // -----------------------------------------------------------------------
-    static void IRAM_ATTR flowPulseISR();
-
 private:
     AutotermUart& heater_;
-    int           flowPin_;
+    bool          hasFlowSensor_;
 
-    // Coolant temperature (fed externally from DS18B20)
+    // Coolant temperature (fed externally from CoolantTempSensor)
     float         coolantTemp_;
     bool          coolantValid_;
 
-    // Flow sensor
-    static volatile uint32_t flowPulseCount_;
+    // Flow sensor (fed externally from FlowSensor)
     float         flowRate_;         ///< L/min
-    unsigned long lastFlowCalcMs_;
     unsigned long lastFlowPulseMs_;  ///< Last time a pulse was seen
 
     // Safety state

@@ -9,16 +9,16 @@
 
 #include "heater_addon.h"
 #include "config.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include "coolant_temp_sensor.h"
+#include "flow_sensor.h"
 
 // ---------------------------------------------------------------------------
 // Module-level instances
 // ---------------------------------------------------------------------------
 static AutotermUart*      s_heater  = nullptr;
 static HeaterSafety*      s_safety  = nullptr;
-static OneWire*           s_oneWire = nullptr;
-static DallasTemperature* s_ds18b20 = nullptr;
+static CoolantTempSensor* s_coolant = nullptr;
+static FlowSensor*        s_flow    = nullptr;
 
 static unsigned long s_lastTempRead = 0;
 
@@ -33,18 +33,18 @@ void heater_addon_setup() {
     s_heater = new AutotermUart(Serial2, HEATER_UART_RX_PIN, HEATER_UART_TX_PIN);
     s_heater->begin();
 
-    // Safety monitor
-    s_safety = new HeaterSafety(*s_heater, FLOW_SENSOR_PIN);
+    // Safety monitor (flow sensor present if pin >= 0)
+    s_safety = new HeaterSafety(*s_heater, FLOW_SENSOR_PIN >= 0);
     s_safety->begin();
 
-    // DS18B20 coolant sensor
-    s_oneWire = new OneWire(ONEWIRE_BUS_PIN);
-    s_ds18b20 = new DallasTemperature(s_oneWire);
-    s_ds18b20->begin();
+    // Coolant temperature sensor (DS18B20)
+    s_coolant = new CoolantTempSensor(ONEWIRE_BUS_PIN);
+    s_coolant->begin();
 
-    int count = s_ds18b20->getDeviceCount();
-    Serial.printf("[HeaterAddon] DS18B20: %d sensor(s) on GPIO %d\n",
-                  count, ONEWIRE_BUS_PIN);
+    // Flow sensor (pulse counter)
+    s_flow = new FlowSensor(FLOW_SENSOR_PIN);
+    s_flow->begin();
+
     Serial.println("[HeaterAddon] Ready");
 }
 
@@ -56,12 +56,15 @@ void heater_addon_loop() {
     // Update Autoterm communication
     s_heater->update();
 
-    // Read coolant temperature
+    // Read sensors and feed to safety monitor
     if (now - s_lastTempRead >= TEMP_READ_INTERVAL) {
         s_lastTempRead = now;
-        s_ds18b20->requestTemperatures();
-        float coolantTemp = s_ds18b20->getTempCByIndex(0);
-        s_safety->feedCoolantTemp(coolantTemp);
+
+        float coolant = s_coolant->read();
+        s_safety->feedCoolantTemp(coolant);
+
+        float flow = s_flow->update();
+        s_safety->feedFlowRate(flow, s_flow->lastPulseTime());
     }
 
     // Run safety checks
