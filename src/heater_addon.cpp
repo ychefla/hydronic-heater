@@ -1,7 +1,11 @@
 /**
  * @file heater_addon.cpp
  * @brief Paku-core heater add-on implementation.
+ *
+ * Not compiled in EMULATOR_MODE (no OneWire/DS18B20 hardware).
  */
+
+#ifndef EMULATOR_MODE
 
 #include "heater_addon.h"
 #include "config.h"
@@ -150,3 +154,5 @@ AutotermUart& heater_addon_getUart() {
 HeaterSafety& heater_addon_getSafety() {
     return *s_safety;
 }
+
+#endif // !EMULATOR_MODE

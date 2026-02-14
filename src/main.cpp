@@ -6,27 +6,53 @@
  * firmware (not integrated into paku-core). Useful for bench testing
  * the Autoterm UART interface with just a serial console.
  *
+ * Build modes:
+ *   - Default: expects real Autoterm on UART + DS18B20 sensor
+ *   - EMULATOR_MODE (-D EMULATOR_MODE): runs an internal Autoterm
+ *     emulator on Serial1, cross-wired to Serial2 via the ESP32
+ *     GPIO matrix. No external wiring or sensors needed.
+ *
  * When integrated with paku-core, this file is NOT compiled.
  * Instead, paku-core calls heater_addon_setup() / heater_addon_loop()
  * from the add-on API (see heater_addon.h).
  */
 
 #include <Arduino.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include "config.h"
 #include "autoterm_uart.h"
 #include "heater_safety.h"
+
+#ifdef EMULATOR_MODE
+#include "autoterm_emulator.h"
+#else
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#endif
 
 // ---------------------------------------------------------------------------
 // Globals
 // ---------------------------------------------------------------------------
 static AutotermUart   heater(Serial2, HEATER_UART_RX_PIN, HEATER_UART_TX_PIN);
+
+#ifdef EMULATOR_MODE
+// In emulator mode: safety runs without flow sensor and DS18B20
+// (the emulator can simulate faults via serial commands instead)
+static HeaterSafety   safety(heater, -1);
+
+// Emulator on Serial1 — cross-wired internally:
+//   Emulator TX (GPIO 16) → Driver RX (GPIO 16)
+//   Driver TX (GPIO 17) → Emulator RX (GPIO 17)
+static AutotermEmulator emulator(Serial1, HEATER_UART_TX_PIN, HEATER_UART_RX_PIN);
+
+// Simulated coolant temperature (controllable via serial commands)
+static float simCoolantTemp = 45.0f;
+#else
 static HeaterSafety   safety(heater, FLOW_SENSOR_PIN);
 
 // DS18B20 on coolant return line
 static OneWire        oneWire(ONEWIRE_BUS_PIN);
 static DallasTemperature ds18b20(&oneWire);
+#endif
 
 // Serial command buffer
 static String commandBuffer;
@@ -42,6 +68,11 @@ static void processCommand(const String& cmd);
 static void printHelp();
 static void printStatus();
 
+#ifdef EMULATOR_MODE
+static void processEmulatorCommand(const String& cmd);
+static void printEmulatorHelp();
+#endif
+
 // ===========================================================================
 // setup()
 // ===========================================================================
@@ -52,20 +83,36 @@ void setup() {
 
     Serial.println("\n========================================");
     Serial.println("  Autoterm Flow 5D — UART Controller");
+#ifdef EMULATOR_MODE
+    Serial.println("  *** EMULATOR MODE — no wiring ***");
+#else
     Serial.println("  Hydronic Heater Add-on (standalone)");
+#endif
     Serial.println("========================================\n");
 
-    // Initialize Autoterm UART
+#ifdef EMULATOR_MODE
+    // Start emulator FIRST — it must be listening before the driver
+    // sends its first cycle frame. Internal GPIO loopback: both
+    // UARTs share the same pins, cross-wired via the GPIO matrix.
+    emulator.begin();
+#endif
+
+    // Initialize Autoterm UART driver
     heater.begin();
 
     // Initialize safety monitor
     safety.begin();
 
-    // Initialize DS18B20
+#ifndef EMULATOR_MODE
+    // Initialize DS18B20 (only in real hardware mode)
     ds18b20.begin();
     int sensorCount = ds18b20.getDeviceCount();
     Serial.printf("[DS18B20] Found %d sensor(s) on GPIO %d\n",
                   sensorCount, ONEWIRE_BUS_PIN);
+#else
+    Serial.println("[Emulator] DS18B20 simulated — use 'coolant <temp>' to set");
+    safety.feedCoolantTemp(simCoolantTemp);
+#endif
 
     printHelp();
 }
@@ -77,15 +124,25 @@ void setup() {
 void loop() {
     unsigned long now = millis();
 
+#ifdef EMULATOR_MODE
+    // 0. Update emulator (must run before driver to process responses)
+    emulator.update();
+#endif
+
     // 1. Update Autoterm UART communication
     heater.update();
 
-    // 2. Read DS18B20 periodically and feed to safety monitor
+    // 2. Read temperature and feed to safety monitor
     if (now - lastTempRead >= TEMP_READ_INTERVAL) {
         lastTempRead = now;
+#ifdef EMULATOR_MODE
+        // Simulated coolant temp — already set via commands
+        safety.feedCoolantTemp(simCoolantTemp);
+#else
         ds18b20.requestTemperatures();
         float coolantTemp = ds18b20.getTempCByIndex(0);
         safety.feedCoolantTemp(coolantTemp);
+#endif
     }
 
     // 3. Run safety checks
@@ -121,6 +178,15 @@ static void processCommand(const String& cmd) {
     String c = cmd;
     c.trim();
     c.toLowerCase();
+
+#ifdef EMULATOR_MODE
+    // Emulator-specific commands (prefixed with 'emu' or fault injection)
+    if (c.startsWith("emu ") || c.startsWith("coolant ") ||
+        c.startsWith("error ") || c.startsWith("voltage ")) {
+        processEmulatorCommand(c);
+        return;
+    }
+#endif
 
     if (c == "start") {
         if (safety.isTripped()) {
@@ -165,13 +231,16 @@ static void processCommand(const String& cmd) {
 }
 
 static void printHelp() {
-    Serial.println("\nCommands:");
+    Serial.println("\n--- Driver Commands ---");
     Serial.println("  start [0-9] — Start heater (power mode, default level 5)");
     Serial.println("  stop        — Shutdown heater");
     Serial.println("  vent        — Fan-only ventilation mode");
     Serial.println("  status      — Print current status");
     Serial.println("  reset       — Clear safety trip (if conditions allow)");
     Serial.println("  help        — Show this help");
+#ifdef EMULATOR_MODE
+    printEmulatorHelp();
+#endif
     Serial.println();
 }
 
@@ -202,5 +271,94 @@ static void printStatus() {
     } else {
         Serial.println("  Safety: OK");
     }
+
+#ifdef EMULATOR_MODE
+    Serial.println("--- Emulator ---");
+    Serial.printf("  Emu state:     %s\n", autotermStateName(emulator.getState()));
+    Serial.printf("  Emu core temp: %.0f °C\n", emulator.getCoreTemp());
+    Serial.printf("  Emu voltage:   %.1f V\n", emulator.getVoltage());
+    Serial.printf("  Emu power:     %d\n", emulator.getPowerLevel());
+    Serial.printf("  Emu RX/TX:     %lu / %lu frames\n",
+                  emulator.getFramesRx(), emulator.getFramesTx());
+    Serial.printf("  Sim coolant:   %.1f °C\n", simCoolantTemp);
+#endif
+
     Serial.println("---------------------");
 }
+
+// ===========================================================================
+// Emulator-specific commands (fault injection, simulation control)
+// ===========================================================================
+
+#ifdef EMULATOR_MODE
+static void processEmulatorCommand(const String& cmd) {
+    if (cmd.startsWith("coolant ")) {
+        float temp = cmd.substring(8).toFloat();
+        simCoolantTemp = temp;
+        safety.feedCoolantTemp(simCoolantTemp);
+        Serial.printf("[Sim] Coolant temperature set to %.1f °C\n", simCoolantTemp);
+    }
+    else if (cmd == "error clear" || cmd == "error none") {
+        emulator.injectError(AutotermError::None);
+    }
+    else if (cmd == "error overheat") {
+        emulator.injectError(AutotermError::Overheating);
+    }
+    else if (cmd == "error voltage") {
+        emulator.injectError(AutotermError::Voltage);
+    }
+    else if (cmd == "error glowplug") {
+        emulator.injectError(AutotermError::GlowPlugFailure);
+    }
+    else if (cmd == "error flame") {
+        emulator.injectError(AutotermError::NoFlame);
+    }
+    else if (cmd == "error ignition") {
+        emulator.injectError(AutotermError::IgnitionFailure);
+    }
+    else if (cmd == "error fan") {
+        emulator.injectError(AutotermError::FanFailure);
+    }
+    else if (cmd.startsWith("voltage ")) {
+        String val = cmd.substring(8);
+        if (val == "normal") {
+            emulator.overrideVoltage(NAN);
+        } else {
+            float volts = val.toFloat();
+            if (volts > 0.0f) {
+                emulator.overrideVoltage(volts);
+            }
+        }
+    }
+    else if (cmd == "emu status") {
+        Serial.println("--- Emulator Details ---");
+        Serial.printf("  State:      %s\n", autotermStateName(emulator.getState()));
+        Serial.printf("  Core temp:  %.0f °C\n", emulator.getCoreTemp());
+        Serial.printf("  Voltage:    %.1f V\n", emulator.getVoltage());
+        Serial.printf("  Power:      %d\n", emulator.getPowerLevel());
+        Serial.printf("  Mode:       0x%02X\n", emulator.getOperatingMode());
+        Serial.printf("  Panel temp: %d °C\n", emulator.getLastPanelTemp());
+        Serial.printf("  RX/TX:      %lu / %lu frames\n",
+                      emulator.getFramesRx(), emulator.getFramesTx());
+        Serial.println("------------------------");
+    }
+    else {
+        Serial.printf("Unknown emulator command: '%s'\n", cmd.c_str());
+    }
+}
+
+static void printEmulatorHelp() {
+    Serial.println("\n--- Emulator Commands ---");
+    Serial.println("  coolant <°C>      — Set simulated coolant temperature");
+    Serial.println("  error overheat    — Inject E01 overheat error");
+    Serial.println("  error voltage     — Inject E02 voltage error");
+    Serial.println("  error glowplug    — Inject E03 glow plug error");
+    Serial.println("  error flame       — Inject E13 no-flame error");
+    Serial.println("  error ignition    — Inject E09 ignition failure");
+    Serial.println("  error fan         — Inject E07 fan failure");
+    Serial.println("  error clear       — Clear injected error");
+    Serial.println("  voltage <V>       — Override battery voltage");
+    Serial.println("  voltage normal    — Resume voltage simulation");
+    Serial.println("  emu status        — Show emulator internals");
+}
+#endif // EMULATOR_MODE

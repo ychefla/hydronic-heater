@@ -19,7 +19,7 @@
 // Physical layer
 // ---------------------------------------------------------------------------
 static constexpr uint32_t AUTOTERM_BAUD        = 2400;
-static constexpr uint8_t  AUTOTERM_DATA_BITS   = SERIAL_8N1;
+static constexpr uint32_t AUTOTERM_DATA_BITS   = SERIAL_8N1;
 
 // ---------------------------------------------------------------------------
 // Frame constants
