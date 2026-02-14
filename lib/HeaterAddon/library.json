@@ -1,0 +1,11 @@
+{
+  "name": "HeaterAddon",
+  "version": "1.0.0",
+  "description": "Paku heater add-on: Autoterm Flow 5D integration API for paku-core",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "dependencies": {
+    "AutotermUART": "*",
+    "Sensors": "*"
+  }
+}

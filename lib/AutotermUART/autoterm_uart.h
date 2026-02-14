@@ -130,6 +130,22 @@ public:
     /** @brief true if we have a valid, recent status. */
     bool isOnline() const { return linkState_ == UartLinkState::Online; }
 
+#ifdef HEATER_EMULATE
+    /**
+     * @brief Inject a simulated status (emulation mode only).
+     *
+     * Sets the status, marks the link as Online, and refreshes
+     * the last-valid-rx timestamp so the link never times out.
+     */
+    void setSimulatedStatus(const AutotermStatus& st) {
+        status_      = st;
+        status_.valid = true;
+        status_.timestamp = millis();
+        linkState_   = UartLinkState::Online;
+        lastValidRxMs_ = millis();
+    }
+#endif
+
     /** @brief Number of valid frames received since begin(). */
     uint32_t getFrameCount() const { return frameCount_; }
 
