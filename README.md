@@ -40,7 +40,9 @@ Autoterm Flow 5D (built-in pump + heater)
 | --------- | ------- | ----- |
 | Autoterm Flow 5D (12V) | Heater + circulation pump | See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) |
 | ESP32 (LilyGo T-Display S3) | Smart controller | Runs as paku-core add-on (compile-time flag) |
+| Level shifter (ADUM1201) | 5V ↔ 3.3V for UART | Between ESP32 and Autoterm |
 | Flow sensor | Coolant flow safety | GPIO 13 |
+| DS18B20 | Coolant return temperature | GPIO 4 (OneWire) — for SAFE-T1 |
 | UART cable | ESP32 ↔ Autoterm | GPIO 16 RX, GPIO 17 TX |
 
 ### Temperature Sources
@@ -52,10 +54,13 @@ Autoterm Flow 5D (built-in pump + heater)
 | Fan RPM | Autoterm UART telemetry | ✅ |
 | Fuel rate | Autoterm UART telemetry | ✅ |
 | Supply voltage | Autoterm UART telemetry | ✅ |
-| Coolant supply/return | Autoterm UART (TBD) or DS18B20 | ❌ See [future](FUTURE_FEATURES.md) |
+| Coolant return temp | DS18B20 on coolant return line | ✅ Required for SAFE-T1 |
 | Floor supply/return | DS18B20 (need suitable probes) | ❌ See [future](FUTURE_FEATURES.md) |
 
-> **Open question**: Does Autoterm provide coolant temperature via UART? If not, at least one DS18B20 on the coolant return is needed for overheat safety. To be verified with Autoterm documentation.
+> **Resolved**: Community protocol analysis (Air 2D/4D) shows no coolant temperature
+> in the UART status payload. A DS18B20 on the coolant return is required for overheat
+> safety (SAFE-T1). To be re-verified when Flow 5D UART is sniffed — the Flow may
+> expose coolant temp in currently-unknown status bytes.
 
 ### Heating Circuits
 
@@ -125,8 +130,10 @@ pio device monitor   # Serial (115200 baud)
 | ---- | ---- |
 | Autoterm Flow 5D (12V) | ~€600 |
 | Flow sensor | ~€15 |
+| DS18B20 (coolant return) | ~€3 |
+| Level shifter (ADUM1201) | ~€5 |
 | Wiring, connectors | ~€20 |
-| **Total** (ESP32 shared with paku-core) | **~€635** |
+| **Total** (ESP32 shared with paku-core) | **~€643** |
 
 > Plumbing (heat exchanger, floor loops, copper plate, ball valves, expansion tank) is separate from the controller budget.
 

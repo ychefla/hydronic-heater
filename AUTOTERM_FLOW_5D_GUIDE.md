@@ -30,56 +30,123 @@ The certified Autoterm controller handles all combustion:
 
 ## UART Protocol
 
+> **Source**: Reverse-engineered from Autoterm **Air 2D/4D** (community projects below).
+> The Flow 5D (hydronic) likely uses the same protocol framework but **status payload
+> fields may differ** — the Air models have no coolant. Verify with real hardware.
+
+### Community References
+
+- [Boren/ha-autoterm-diesel-heater](https://github.com/Boren/ha-autoterm-diesel-heater) — Python, full PROTOCOL.md (Air model)
+- [timokovanen/esphome-autoterm](https://github.com/timokovanen/esphome-autoterm) — C++ ESP32/ESPHome (Air 2D & 4D)
+- [grimoire314 blog](https://grimoire314.wordpress.com/2018/08/22/planar-diesel-heater-controller-reverse-engineering/) — original reverse-engineering
+
 ### Physical Connection
 
 ```text
-ESP32                    Autoterm Flow 5D
-─────                    ────────────────
-GPIO 16 (RX2) ◄──────── TX
-GPIO 17 (TX2) ────────►  RX
-GND ──────────────────── GND
-
-Baud rate: 2400, 8N1 (verify with Autoterm docs)
-Voltage: 3.3V or 5V (verify for your unit)
+ESP32 (3.3V)     Level Shifter     Autoterm Flow 5D (5V TTL)
+────────────     ─────────────     ────────────────────────
+GPIO 16 (RX2) ◄── ADUM1201 ───◄── TX (White wire)
+GPIO 17 (TX2) ──► ADUM1201 ─────► RX (Green wire)
+GND ─────────────────────────────── GND (Blue wire)
+                                    +5V (Red wire)
 ```
 
-Connection is made at the Autoterm control panel connector.
+| Parameter | Value |
+| --------- | ----- |
+| Baud rate | 2400 |
+| Data bits | 8 |
+| Parity | None |
+| Stop bits | 1 |
+| Logic level | **5V TTL** — level shifter required (e.g. ADUM1201) |
 
-### Frame Format
+⚠️ **ESP32 is 3.3V. Autoterm is 5V. Direct connection risks damaging the ESP32.**
 
-Binary frame-based protocol (community-documented, verify with official docs):
+Connection at the Autoterm control panel connector. Wire colors may vary at connectors.
+
+### Frame Format (confirmed)
 
 ```text
-┌──────┬────────┬─────────┬──────────┬──────────┐
-│ SYNC │ LENGTH │ COMMAND │   DATA   │ CHECKSUM │
-│ 0xAA │ 1 byte │ 1 byte  │ N bytes  │ 1 byte   │
-└──────┴────────┴─────────┴──────────┴──────────┘
+┌──────────┬────────┬────────┬──────────┬─────────┬─────────────┬───────────┐
+│ Preamble │ Sender │ Length │ Reserved │ Command │ Payload     │ CRC-16    │
+│ 0xAA     │ 1 byte │ 1 byte │ 0x00     │ 1 byte  │ N bytes     │ 2 bytes   │
+└──────────┴────────┴────────┴──────────┴─────────┴─────────────┴───────────┘
 ```
 
-### Commands
+- **Sender**: `0x03` = Panel (controller), `0x04` = Heater
+- **Length**: payload byte count (after command, before CRC)
+- **CRC**: CRC-16 Modbus, polynomial 0x8005 (reversed), init 0xFFFF, **big-endian**
+- **Minimum message**: 7 bytes (no payload)
 
-| Command | Direction | Description |
-| ------- | --------- | ----------- |
-| Start heater | ESP32 → Autoterm | Begin startup sequence |
-| Stop heater | ESP32 → Autoterm | Begin shutdown sequence |
-| Set power level | ESP32 → Autoterm | Set heat output (%) |
-| Set target temp | ESP32 → Autoterm | Set thermostat target |
-| Request status | ESP32 → Autoterm | Poll current state |
-| Status response | Autoterm → ESP32 | State + telemetry data |
+### Commands (confirmed for Air, expected same for Flow)
 
-### Telemetry from UART
+| ID | Name | Direction | Payload | Description |
+| --- | --- | --- | --- | --- |
+| `0x01` | START | Panel→Heater | 6 bytes | Start with mode/temp/power |
+| `0x02` | GET/SET | Both | 0 or 6 bytes | Query or change settings |
+| `0x03` | SHUTDOWN | Panel→Heater | 0 bytes | Stop heater |
+| `0x0F` | STATUS | Both | 0 / 10 bytes | Request / report status |
+| `0x11` | PANEL_TEMP | Both | 1 byte | Exchange panel temperature |
+| `0x23` | VENTILATION | Both | 3 bytes | Fan-only mode |
 
-| Parameter | Description |
-| --------- | ----------- |
-| Heater state | Off / Starting / Running / Stopping / Error |
-| Combustion temp | Internal temperature |
-| Fan RPM | Combustion fan speed |
-| Fuel rate | Current consumption (L/hr) |
-| Power level | Current output (%) |
-| Error code | Diagnostic code (if error state) |
-| Supply voltage | Battery voltage |
+### START Payload (6 bytes)
 
-> **Open question**: Does the UART telemetry include coolant supply/return temperature? If not, a DS18B20 on the coolant return is needed for overheat safety. To be verified with Autoterm documentation.
+```text
+Bytes 0-1: 0xFF 0xFF (marker)
+Byte 2:    Mode — 0x01=By Heater, 0x02=By Panel, 0x03=By External, 0x04=By Power
+Byte 3:    Target temp °C (0xFF if unused)
+Byte 4:    Ventilation — 0x01=On, 0x02=Off
+Byte 5:    Power level 0-9 (0xFF if unused)
+```
+
+### STATUS Response (10 bytes, from Air — verify for Flow)
+
+| Byte | Field | Notes |
+| --- | --- | --- |
+| 0 | State | 0x00=Off, 0x01=Starting, 0x04=Running, 0x05=Shutting Down, 0x08=Ventilation |
+| 1 | Unknown | |
+| 2 | Error code | 0x00=None, 0x01=Overheat, 0x02=Voltage, ... (19 codes) |
+| 3 | Unknown | |
+| 4-5 | Battery voltage | Little-endian, ×10 (e.g. 0x7F 0x00 = 12.7V) |
+| 6-7 | Unknown | |
+| 8 | Core temp °C | Heater core temperature |
+| 9 | Unknown | |
+
+> ⚠️ **Flow 5D difference**: The Air models have no coolant. The Flow 5D may use
+> unknown bytes (1, 3, 6-7, 9) for coolant temperature or pump status. Must verify
+> by sniffing UART traffic on real Flow 5D hardware.
+
+### Communication Pattern (confirmed)
+
+Repeating 3-second cycle:
+
+1. **Second 1**: GET settings (`0x02`)
+2. **Second 2**: STATUS request (`0x0F`)
+3. **Second 3**: PANEL_TEMP exchange (`0x11`)
+
+### Error Codes (confirmed for Air)
+
+| Code | Name | Description |
+| --- | --- | --- |
+| 0x00 | None | No error |
+| 0x01 | E01 | Overheating |
+| 0x02 | E02 | Voltage too high/low |
+| 0x03 | E03 | Glow plug failure |
+| 0x04 | E04 | Fuel pump failure |
+| 0x05 | E05 | Flame sensor failure |
+| 0x06 | E06 | Temperature sensor failure |
+| 0x07 | E07 | Combustion air fan failure |
+| 0x09 | E09 | Failed to start |
+| 0x0D | E13 | No flame / ignition failure |
+
+### What Needs Verification on Flow 5D
+
+- [ ] Do unknown status bytes carry coolant temp or pump status?
+- [ ] Are command IDs and payloads identical to Air models?
+- [ ] Any additional Flow-specific error codes?
+- [ ] Baud rate confirmed 2400 on Flow 5D?
+
+Verification method: sniff UART between stock controller and Flow 5D using
+[Boren's monitor tool](https://github.com/Boren/ha-autoterm-diesel-heater/blob/main/monitor/heater_monitor.py).
 
 ## Obtaining Documentation
 

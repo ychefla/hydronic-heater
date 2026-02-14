@@ -38,13 +38,15 @@ Prevent coolant from reaching boiling point. Coolant temperature source depends 
 
 | Requirement | Detail |
 | ----------- | ------ |
-| Source | Autoterm UART telemetry (preferred) or dedicated DS18B20 (if needed) |
+| Source | DS18B20 on coolant return line (GPIO 4, OneWire) |
 | Trigger | Coolant temperature > 95°C |
 | Action | Send stop command to Autoterm, enter ERROR state |
 | Response time | < 2 seconds |
 | Recovery | Manual reset after coolant drops below 70°C |
 
-> **Open question**: Verify whether Autoterm provides coolant temperature via UART. If not, add a DS18B20 on the coolant return line for this safety function.
+> Community protocol shows no coolant temperature in UART status payload (Air models).
+> DS18B20 on coolant return is the primary source. If Flow 5D UART does provide
+> coolant temp, it can serve as a secondary check.
 
 ### SAFE-C1: UART Communication Watchdog
 
