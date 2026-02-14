@@ -80,6 +80,7 @@ Autoterm Flow 5D (built-in pump + heater)
 - Coolant overheat detection → stop heater
 - UART watchdog (no Autoterm response for 30s → stop)
 - ESP32 hardware watchdog
+- Autoterm emulator for development/testing (no hardware needed)
 
 **Not in scope (v1):** zone valves, PID control, heat exchanger fan control, scheduling, power profiles, additional DS18B20 sensors. See [FUTURE_FEATURES.md](FUTURE_FEATURES.md).
 
@@ -119,10 +120,18 @@ paku-core (base)          ← WiFi, MQTT, display, OTA
 ## Build
 
 ```bash
-pio run              # Build
-pio run -t upload    # Flash
-pio device monitor   # Serial (115200 baud)
+# Production (requires real Autoterm + DS18B20 + level shifter)
+pio run -e esp32dev -t upload
+
+# Emulator (no wiring needed — internal UART loopback)
+pio run -e emulator -t upload
+pio device monitor   # Serial console (115200 baud)
 ```
+
+The emulator build (`-D EMULATOR_MODE`) runs a simulated Autoterm ECU
+on Serial1, cross-wired to the driver on Serial2 via the ESP32 GPIO
+matrix. Supports error injection and simulated coolant temperature for
+testing the safety layer. Type `help` in the serial console for commands.
 
 ## Cost Estimate (v1, EUR)
 
