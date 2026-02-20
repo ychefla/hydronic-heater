@@ -2,13 +2,36 @@
 
 ESP32 smart controller for the **Autoterm Flow 5D** hydronic diesel heater in a campervan.
 
+> ## ⚠️ Status: Waiting for Autoterm CAN Adapter
+>
+> **The UART protocol code in this repo is UNVERIFIED for the Flow 5D.**
+> It was inferred from community reverse-engineering of Autoterm **Air 2D/4D**
+> (different product line). Autoterm has confirmed the Flow 5D protocol is
+> proprietary and not publicly documented.
+>
+> **Autoterm is developing a CAN adapter** that will decode heater signals to
+> the **CIVD standard** (standardized CAN protocol for vehicle heaters).
+> Estimated availability: 2026. When released, this project will integrate
+> via CAN instead of the unverified UART protocol.
+>
+> **Current code status:**
+> - `lib/CanBus/` — Generic ESP32 TWAI/CAN driver (ready, hardware-agnostic)
+> - `lib/AutotermUART/` — ⚠️ UNVERIFIED, based on Air 2D/4D inference
+> - `lib/AutotermEmulator/` — Emulator for the unverified UART protocol
+> - `lib/HeaterAddon/` — paku-core integration (works with emulator)
+> - `lib/Sensors/` — DS18B20 + flow sensor drivers (verified, hardware-independent)
+
 ## Overview
 
 The Autoterm Flow 5D handles combustion (certified controller). The ESP32 adds:
 
-- **UART control**: start/stop, power setpoint, read telemetry
+- **CAN bus integration** (pending): CIVD-standard communication via Autoterm's upcoming CAN adapter
 - **MQTT telemetry**: publish heater data to Paku-IoT
-- **Safety monitoring**: coolant flow, coolant overheat, UART watchdog
+- **Safety monitoring**: coolant flow, coolant overheat, communication watchdog
+
+> **Note:** The original plan was UART control (start/stop, power setpoint, read telemetry).
+> However, Autoterm confirmed the UART protocol is proprietary. The project is transitioning
+> to CAN/CIVD when the adapter becomes available. UART code remains for reference/emulation only.
 
 Cabin temperature is measured by RuuviTag (via paku-core BLE).
 
@@ -39,11 +62,13 @@ Autoterm Flow 5D (built-in pump + heater)
 | Component | Purpose | Notes |
 | --------- | ------- | ----- |
 | Autoterm Flow 5D (12V) | Heater + circulation pump | See [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) |
+| Autoterm CAN adapter | CIVD bridge | ⏳ Not yet available — ETA 2026 |
 | ESP32 (LilyGo T-Display S3) | Smart controller | Runs as paku-core add-on (compile-time flag) |
-| Level shifter (ADUM1201) | 5V ↔ 3.3V for UART | Between ESP32 and Autoterm |
+| CAN transceiver (SN65HVD230) | 3.3V CAN bus interface | Between ESP32 TWAI and CAN adapter |
+| Level shifter (ADUM1201) | 5V ↔ 3.3V for UART | ⚠️ UART path — unverified protocol |
 | Flow sensor | Coolant flow safety | GPIO 13 |
 | DS18B20 | Coolant return temperature | GPIO 4 (OneWire) — for SAFE-T1 |
-| UART cable | ESP32 ↔ Autoterm | GPIO 16 RX, GPIO 17 TX |
+| UART cable | ESP32 ↔ Autoterm | GPIO 16 RX, GPIO 17 TX — ⚠️ unverified |
 
 ### Temperature Sources
 
@@ -74,13 +99,18 @@ Autoterm Flow 5D (built-in pump + heater)
 
 **In scope:**
 
-- Autoterm UART communication (start, stop, set power, read telemetry)
-- Publish telemetry to Paku-IoT via MQTT
+- Generic ESP32 CAN/TWAI driver (ready — `lib/CanBus/`)
 - Coolant flow monitoring (flow sensor) → stop heater if flow drops
 - Coolant overheat detection → stop heater
-- UART watchdog (no Autoterm response for 30s → stop)
+- Communication watchdog (UART or CAN — no response → stop)
 - ESP32 hardware watchdog
+- Publish telemetry to Paku-IoT via MQTT
 - Autoterm emulator for development/testing (no hardware needed)
+
+**Blocked (waiting for Autoterm CAN adapter):**
+
+- CIVD protocol integration (start, stop, set power, read telemetry via CAN)
+- Verified heater communication — UART protocol is unverified for Flow 5D
 
 **Not in scope (v1):** zone valves, PID control, heat exchanger fan control, scheduling, power profiles, additional DS18B20 sensors. See [FUTURE_FEATURES.md](FUTURE_FEATURES.md).
 
@@ -151,7 +181,7 @@ testing the safety layer. Type `help` in the serial console for commands.
 | Document | Content |
 | -------- | ------- |
 | [README.md](README.md) | Project overview, hardware, v1 scope (this file) |
-| [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) | Autoterm specs, UART protocol |
+| [AUTOTERM_FLOW_5D_GUIDE.md](AUTOTERM_FLOW_5D_GUIDE.md) | Autoterm specs, UART protocol (⚠️ unverified for Flow 5D) |
 | [SAFETY.md](SAFETY.md) | Safety requirements |
 | [PAKU_INTEGRATION.md](PAKU_INTEGRATION.md) | MQTT topics, Paku-IoT integration |
 | [FUTURE_FEATURES.md](FUTURE_FEATURES.md) | Deferred features (valves, PID, scheduling, sensors) |

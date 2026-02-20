@@ -1,0 +1,7 @@
+{
+  "name": "CanBus",
+  "version": "0.1.0",
+  "description": "Generic ESP32 TWAI/CAN 2.0B driver — no protocol-specific logic",
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}

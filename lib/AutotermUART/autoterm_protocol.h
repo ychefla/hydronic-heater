@@ -2,10 +2,18 @@
  * @file autoterm_protocol.h
  * @brief Autoterm UART protocol constants and frame definitions.
  *
- * Protocol reverse-engineered from Autoterm Air 2D/4D (community projects).
- * Expected compatible with Flow 5D — verify with real hardware.
+ * ⚠️ UNVERIFIED FOR AUTOTERM FLOW 5D (HYDRONIC) ⚠️
  *
- * Sources:
+ * This protocol was inferred from community reverse-engineering of Autoterm
+ * Air 2D/4D (air heaters). Autoterm has confirmed the Flow 5D protocol is
+ * proprietary and not publicly documented. Frame format, command IDs, and
+ * payload fields MAY DIFFER on the Flow 5D.
+ *
+ * DO NOT use this for real heater control without hardware verification.
+ * Autoterm is developing a CAN adapter (CIVD standard) — when available,
+ * the project should migrate to CAN (see lib/CanBus/).
+ *
+ * Community references (Air 2D/4D only — NOT Flow 5D):
  *   - https://github.com/Boren/ha-autoterm-diesel-heater (PROTOCOL.md)
  *   - https://github.com/timokovanen/esphome-autoterm (C++ ESP32)
  */

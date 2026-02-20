@@ -2,6 +2,10 @@
  * @file autoterm_emulator.h
  * @brief Autoterm Flow 5D heater emulator for testing.
  *
+ * ⚠️ Based on UNVERIFIED protocol (inferred from Air 2D/4D community RE).
+ * The emulator is useful for testing the software architecture but does NOT
+ * guarantee compatibility with real Flow 5D hardware.
+ *
  * Simulates the heater ECU on a HardwareSerial port. Receives
  * commands from the AutotermUart driver and responds with realistic
  * status frames, using the same binary protocol.

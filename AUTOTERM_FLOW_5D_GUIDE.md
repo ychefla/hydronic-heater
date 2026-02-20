@@ -1,5 +1,14 @@
 # Autoterm Flow 5D — Heater Reference
-
+> ## ⚠️ UART Protocol: UNVERIFIED for Flow 5D
+>
+> The UART protocol documented below was **inferred from Autoterm Air 2D/4D**
+> (community reverse-engineering). Autoterm has confirmed the Flow 5D protocol
+> is **proprietary and not publicly documented**.
+>
+> **Do not use for real heater control without hardware verification.**
+>
+> Autoterm is developing a **CAN adapter (CIVD standard)** — estimated 2026.
+> When available, this project will migrate to CAN. See `lib/CanBus/`.
 Heater-specific information for the Autoterm Flow 5D. For project overview and v1 scope, see [README.md](README.md).
 
 ## Specifications
