@@ -69,7 +69,8 @@ void heater_addon_telemetry(JsonDocument& doc);
  * Called by paku-core when a message arrives on the heater command topic.
  *
  * Expected JSON commands:
- *   { "cmd": "start", "power": 5 }
+ *   { "cmd": "start", "mode": "power", "power": 5 }
+ *   { "cmd": "start", "mode": "thermostat", "target_temp": 22 }
  *   { "cmd": "stop" }
  *   { "cmd": "vent", "power": 3 }
  *   { "cmd": "reset" }

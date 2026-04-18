@@ -442,16 +442,31 @@ void heater_addon_command(const char* payload, unsigned int length) {
             Serial.println("[HeaterAddon] Cannot start: safety tripped");
             return;
         }
-        uint8_t power = doc["power"] | 5;
-        power = constrain(power, 0, 9);
+        const char* mode = doc["mode"] | "power";  // default to power for backward compat
+        if (strcmp(mode, "thermostat") == 0) {
+            uint8_t targetTemp = doc["target_temp"] | 21;
+            targetTemp = constrain(targetTemp, 10, 30);
 #ifdef HEATER_EMULATE
-        s_emuRunning = true;
-        s_emuStateChangeAt = millis();
-        Serial.printf("[HeaterAddon] EMU START power=%d\n", power);
+            s_emuRunning = true;
+            s_emuStateChangeAt = millis();
+            Serial.printf("[HeaterAddon] EMU START thermostat target=%d°C\n", targetTemp);
 #else
-        s_heater->start(MODE_BY_POWER, 0xFF, power);
-        Serial.printf("[HeaterAddon] START power=%d\n", power);
+            s_heater->start(MODE_BY_HEATER, targetTemp, 0xFF);
+            Serial.printf("[HeaterAddon] START thermostat target=%d°C\n", targetTemp);
 #endif
+        } else {
+            // Power mode (default)
+            uint8_t power = doc["power"] | 5;
+            power = constrain(power, 0, 9);
+#ifdef HEATER_EMULATE
+            s_emuRunning = true;
+            s_emuStateChangeAt = millis();
+            Serial.printf("[HeaterAddon] EMU START power=%d\n", power);
+#else
+            s_heater->start(MODE_BY_POWER, 0xFF, power);
+            Serial.printf("[HeaterAddon] START power=%d\n", power);
+#endif
+        }
     }
     else if (strcmp(cmd, "stop") == 0) {
 #ifdef HEATER_EMULATE
